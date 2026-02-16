@@ -391,13 +391,13 @@ export default function SubmitExpense() {
                 onDismiss={() => setShowEditor(false)}
             >
                 <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+                    <View style={styles.editorHeader}>
+                        <Text style={styles.editorTitle}>{getItemFormValues('id') ? 'Edit Item' : 'New Item'}</Text>
+                        <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
+                            <MaterialCommunityIcons name="close" size={22} color="#111" />
+                        </TouchableOpacity>
+                    </View>
                     <View style={[styles.editorContent, { paddingBottom: insets.bottom }]}>
-                        <View style={styles.editorHeader}>
-                            <Text style={styles.editorTitle}>{getItemFormValues('id') ? 'Edit Item' : 'New Item'}</Text>
-                            <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
-                                <MaterialCommunityIcons name="close" size={22} color="#111" />
-                            </TouchableOpacity>
-                        </View>
                         <ScrollView
                             ref={editorScrollRef}
                             style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20 }]}
@@ -681,6 +681,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingBottom: 4,
+        paddingHorizontal: 20,
     },
     editorTitle: {
         fontSize: 22,
