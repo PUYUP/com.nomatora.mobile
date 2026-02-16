@@ -1,4 +1,5 @@
 import ExpenseItem from "@/components/partials/expense-item";
+import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
 import { ExpenseData, ExpenseItemData } from "@/redux/expense/slice";
 import { RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
@@ -73,7 +74,7 @@ export default function SubmitExpense() {
         return {
             height: Math.abs(height.value) - insets.bottom,
         };
-    }, []);
+    }, [height, insets.bottom]);
     
     // redux
     const expenseItems = useSelector((state: RootState) => state.expense.items);
@@ -86,6 +87,7 @@ export default function SubmitExpense() {
     const [showEditor, setShowEditor] = useState(false);
     const [addCategoryVisible, setAddCategoryVisible] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
+    const [editedItem, setEditedItem] = useState<ExpenseItemData | null>(null);
     const itemNameRef = useRef<TextInput | null>(null);
     const editorScrollRef = useRef<ScrollView | null>(null);
     const shouldFocusNameRef = useRef(false);
@@ -107,6 +109,7 @@ export default function SubmitExpense() {
         reset: resetExpenseForm,
     } = useForm<ExpenseData>();
 
+    const itemValues = useWatch({ control: itemFormControl, name: ['name', 'price', 'category'] });
     const selectedCategory = useWatch({ control: itemFormControl, name: 'category' });
     const renderCategoryItem = useCallback(({ item }: { item: string }) => {
         return (
@@ -119,9 +122,11 @@ export default function SubmitExpense() {
     }, [selectedCategory, setItemFormValue]);
 
     const categoryKeyExtractor = useCallback((item: string) => item, []);
-
     const focusNameInput = useCallback(() => {
+
         if (!shouldFocusNameRef.current) return;
+        if (editedItem) return; // do not focus if it's editing an existing item
+
         InteractionManager.runAfterInteractions(() => {
             setTimeout(() => {
                 if (!shouldFocusNameRef.current) return;
@@ -130,7 +135,7 @@ export default function SubmitExpense() {
                 node.focus?.();
             }, 60);
         });
-    }, []);
+    }, [editedItem]);
 
     const handleLocationPress = () => {
         dispatch({ type: 'expense/updateExpense', payload: { placeName: expenseDraft.placeName ? '' : placeName } });
@@ -138,12 +143,26 @@ export default function SubmitExpense() {
 
     const handleManualAdd = () => {
         resetItemForm();
+        setEditedItem(null);
         setAddCategoryVisible(false);
-        shouldFocusNameRef.current = true;
+        shouldFocusNameRef.current = true; // only focus for new item
         setShowEditor(true);
     };
 
-    const handleScanAdd = () => {
+    const handleScanAdd = async () => {
+        const { granted, status } = await ensureCameraPermission();
+        console.log('Camera permission status:', status);
+        if (!granted) {
+            Alert.alert(
+                'Camera permission needed',
+                'Enable camera access to scan receipts.',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Open Settings', onPress: () => openCameraSettings() },
+                ],
+            );
+            return;
+        }
         router.push('/expenses/(screens)/scan');
     };
 
@@ -170,6 +189,7 @@ export default function SubmitExpense() {
         resetItemForm();
         setShowEditor(false);
         shouldFocusNameRef.current = false;
+        setEditedItem(null);
     }
 
     const saveExpense = (data: ExpenseData) => {
@@ -229,11 +249,16 @@ export default function SubmitExpense() {
 
         for (const key in found) {
             const _k = key as keyof ExpenseItemData;
-            setItemFormValue(_k, found[_k]);
+            if (_k === 'price') {
+                setItemFormValue(_k, found[_k].toString());
+            } else {
+                setItemFormValue(_k, found[_k]);
+            }
         }
 
+        setEditedItem(found);
         setAddCategoryVisible(false);
-        shouldFocusNameRef.current = true;
+        shouldFocusNameRef.current = false; // do not autofocus when editing
         setShowEditor(true);
     };
 
@@ -245,6 +270,8 @@ export default function SubmitExpense() {
         if (!showEditor) return;
         shouldFocusNameRef.current = true;
         const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+            console.log('Back button pressed, closing editor');
+            Keyboard.dismiss();
             handleCloseEditor();
             return true;
         });
@@ -275,6 +302,11 @@ export default function SubmitExpense() {
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
                 setKeyboardHeight(0);
                 setIsKeyboardVisible(false);
+
+                const noValues = itemValues.every((value) => !value || value === '');
+                if (noValues && showEditor) {
+                    handleCloseEditor();
+                }
             }
         );
 
@@ -282,7 +314,7 @@ export default function SubmitExpense() {
             showSubscription.remove();
             hideSubscription.remove();
         };
-    }, []);
+    }, [itemValues]);
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
@@ -553,9 +585,9 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     locationIndicator: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
         position: 'absolute',
         top: 8,
         right: 8,
