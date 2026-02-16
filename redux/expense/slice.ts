@@ -25,7 +25,10 @@ export const expenseSlice = createSlice({
     initialState,
     reducers: {
         addItem: (state, action: PayloadAction<ExpenseItemData>) => {
-            state.items.unshift(action.payload);
+            return {
+                ...state,
+                items: [action.payload, ...state.items],
+            };
         },
         updateItem: (state, action: PayloadAction<ExpenseItemData>) => {
             const idx = state.items.findIndex((item) => item.id == action.payload.id);

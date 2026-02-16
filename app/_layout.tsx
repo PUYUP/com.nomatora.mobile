@@ -5,11 +5,13 @@ import { StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import HeaderBackButton from '@/components/partials/header-back-button';
+import { runMigrations } from '@/database/migrate';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { store } from '@/redux/store';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_900Black } from '@expo-google-fonts/inter';
 import { Playfair_400Regular, Playfair_600SemiBold, Playfair_900Black, Playfair_900Black_Italic, useFonts } from '@expo-google-fonts/playfair';
 import { ZalandoSansExpanded_900Black } from '@expo-google-fonts/zalando-sans-expanded';
+import { useEffect } from 'react';
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Provider } from 'react-redux';
 
@@ -47,6 +49,12 @@ export default function RootLayout() {
     Inter_900Black,
     ZalandoSansExpanded_900Black,
   });
+
+  useEffect(() => {
+    (async () => {
+      await runMigrations();
+    })();
+  }, []);
 
   if (!fontsLoaded) {
     return null;
