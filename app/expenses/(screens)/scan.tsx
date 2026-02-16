@@ -1,11 +1,13 @@
+import { ensureMediaLibraryPermission, openSystemSettings } from "@/libs/image-picker";
 import { supabase } from "@/libs/supabase";
 import { ExpenseItemData } from "@/redux/expense/slice";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import TextRecognition, { TextBlock } from "@react-native-ml-kit/text-recognition";
 import { CameraView } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch } from "react-redux";
 
@@ -71,7 +73,10 @@ export default function ScanExpense() {
         if (!cameraRef.current || isCapturing) return;
         setIsCapturing(true);
         try {
-            const result = await cameraRef.current.takePictureAsync({ quality: 0.6, skipProcessing: true });
+            const result = await cameraRef.current.takePictureAsync({ 
+                quality: 0.6, 
+                skipProcessing: true 
+            });
             console.log("Captured photo:", result?.uri);
             const uri = result?.uri;
             if (uri) {
@@ -86,6 +91,46 @@ export default function ScanExpense() {
             setIsCapturing(false);
         }
     }, [handleRecognizeText, isCapturing]);
+
+    /**
+     * Pick image from gallery, for users who prefer to select existing receipt photo instead of taking new one
+     * Note: this is a temporary solution, we can consider to build a custom gallery picker with cropping feature in the future
+     */
+    const handleGalleryPick = async () => {
+        const { granted, status } = await ensureMediaLibraryPermission();
+        if (!granted) {
+            Alert.alert(
+                "Permission Required",
+                "Media library access is required to select a photo. Please enable it in settings.",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { text: "Open Settings", onPress: () => openSystemSettings() },
+                ]
+            );
+            return;
+        }
+
+        setIsCapturing(true);
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ["images"],
+                quality: 0.6,
+                allowsEditing: false,
+                allowsMultipleSelection: false,
+            });
+
+            if (!result.canceled && result.assets.length > 0) {
+                const uri = result.assets[0].uri;
+                setCapturedUri(uri);
+                setRecognizedText("");
+                handleRecognizeText(uri);
+            }
+        } catch (err) {
+            console.warn("Gallery pick failed", err);
+        } finally {
+            setIsCapturing(false);
+        }
+    };
 
     /**
      * Block result from scanner need to refine with AI
@@ -200,8 +245,8 @@ export default function ScanExpense() {
                         </View>
 
                         <View style={{ width: 120 }}>
-                            <TouchableOpacity style={styles.controlButton}>
-                                <MaterialCommunityIcons name="image-multiple" size={22} color="#999" />
+                            <TouchableOpacity style={styles.controlButton} onPress={handleGalleryPick}>
+                                <MaterialCommunityIcons name="image-multiple" size={22} color="#111" />
                                 <Text style={styles.controlLabel}>Gallery</Text>
                             </TouchableOpacity>
                         </View>

@@ -270,9 +270,8 @@ export default function SubmitExpense() {
         if (!showEditor) return;
         shouldFocusNameRef.current = true;
         const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-            console.log('Back button pressed, closing editor');
-            Keyboard.dismiss();
             handleCloseEditor();
+            Keyboard.dismiss();
             return true;
         });
         return () => sub.remove();

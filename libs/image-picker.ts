@@ -9,12 +9,24 @@ const SETTINGS_URL = Platform.select({ ios: "app-settings:", android: "app-setti
 const isGranted = (status: MediaPermissionState) => status === "granted";
 const needsRequest = (status: MediaPermissionState) => status === "undetermined";
 
-const openSystemSettings = async () => {
-    if (!SETTINGS_URL) return false;
-    const supported = await Linking.canOpenURL(SETTINGS_URL);
-    if (!supported) return false;
-    await Linking.openURL(SETTINGS_URL);
-    return true;
+export const openSystemSettings = async () => { 
+    try { 
+        // Prefer the built-in helper; on Android this uses ACTION_APPLICATION_DETAILS_SETTINGS. 
+        await Linking.openSettings(); 
+        return true; 
+    } catch (err) { 
+        // fall through to platform URL below 
+    } 
+ 
+    if (SETTINGS_URL) { 
+        const supported = await Linking.canOpenURL(SETTINGS_URL); 
+        if (supported) { 
+            await Linking.openURL(SETTINGS_URL); 
+            return true; 
+        } 
+    } 
+ 
+    return false; 
 };
 
 export const getMediaLibraryPermissionStatus = async (): Promise<MediaPermissionState> => {
@@ -38,7 +50,5 @@ export const ensureMediaLibraryPermission = async (): Promise<{ granted: boolean
         return { granted: isGranted(requested), status: requested };
     }
 
-    // Already denied/restricted; prompt settings and report failure
-    await openSystemSettings();
     return { granted: false, status: currentStatus };
 };
