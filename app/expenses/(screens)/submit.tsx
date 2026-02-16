@@ -1,6 +1,4 @@
 import ExpenseItem from "@/components/partials/expense-item";
-import { getDB } from "@/database/drizzle";
-import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
 import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
 import { ExpenseData, ExpenseItemData } from "@/redux/expense/slice";
 import { RootState } from "@/redux/store";
@@ -67,7 +65,6 @@ const useGradualAnimation = (insets: ReturnType<typeof useSafeAreaInsets>) => {
 };
 
 export default function SubmitExpense() {
-    const db = getDB();
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
@@ -172,6 +169,7 @@ export default function SubmitExpense() {
     const handleSaveItem = async (data: ExpenseItemData) => {  
         const id = data.id ?? Date.now().toString();
         const trimmedName = data.name.trim();
+        const now = Date.now();
         const payload: ExpenseItemData = {
             id: id,
             name: trimmedName,
@@ -179,6 +177,8 @@ export default function SubmitExpense() {
             timestamp: Date.now(),
             category: data.category || 'Uncategorized',
             quantity: data.quantity ? data.quantity : 1,
+            createdAt: now,
+            updatedAt: now,
         };
 
         if (data.id) {
@@ -187,20 +187,6 @@ export default function SubmitExpense() {
         } else {
             // add new item
             dispatch({ type: 'expense/addItem', payload });
-
-            const now = Date.now();
-            const item = await (await db).insert(expenseItemsSchema).values({
-                id: payload.id,
-                expenseId: 'temp-expense-id',
-                name: payload.name,
-                price: parseFloat(payload.price),
-                quantity: payload.quantity,
-                category: payload.category,
-                createdAt: now,
-                updatedAt: now,
-            }).returning();
-
-            console.log('Inserted item with ID:', item);
         }
     
         resetItemForm();

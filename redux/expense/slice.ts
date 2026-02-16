@@ -5,8 +5,10 @@ export interface ExpenseItemData {
     timestamp: number;
     name: string;
     price: string;
-    category?: string;
     quantity: number;
+    category?: string;
+    createdAt: number;
+    updatedAt: number;
 }
 
 export interface ExpenseData {
