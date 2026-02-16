@@ -285,7 +285,7 @@ export default function SubmitExpense() {
     }, []);
 
     return (
-        <SafeAreaView style={{ flex: 1 }} edges={['bottom', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
             <Stack.Screen
                 options={{
                     headerTitle: 'Expense Update',
@@ -305,6 +305,8 @@ export default function SubmitExpense() {
 
             <View style={{ flex: 1, justifyContent: 'space-between' }}>
                 <FlatList
+                    bounces={false}
+                    overScrollMode="never"
                     data={expenseItems}
                     keyboardShouldPersistTaps="handled"
                     renderItem={({ item }) => (
@@ -397,13 +399,15 @@ export default function SubmitExpense() {
                             <MaterialCommunityIcons name="close" size={22} color="#111" />
                         </TouchableOpacity>
                     </View>
-                    <View style={[styles.editorContent, { paddingBottom: insets.bottom }]}>
+                    <View style={[styles.editorContent, { padding: 0, paddingBottom: insets.bottom }]}>
                         <ScrollView
                             ref={editorScrollRef}
-                            style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20 }]}
+                            style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20, paddingHorizontal: 20 }]}
                             contentContainerStyle={styles.modalScrollContent}
-                            showsVerticalScrollIndicator={false}
+                            showsVerticalScrollIndicator={true}
                             keyboardShouldPersistTaps="handled"
+                            bounces={false}
+                            overScrollMode="never"
                         >
                             <Controller
                                 control={itemFormControl}
@@ -787,7 +791,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     modalFooterButtons: {
-        
+        paddingHorizontal: 20,
     },
     modalActionButton: {
         flex: 1,
