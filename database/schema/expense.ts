@@ -7,6 +7,11 @@ export const expenses = sqliteTable('expenses', {
     latitude: real('latitude'),
     longitude: real('longitude'),
     
+    status: text('status')
+        .notNull()
+        .$type<'draft' | 'published'>()
+        .default('draft'),
+        
     note: text('note'),
 
     currency: text('currency').default('USD'),

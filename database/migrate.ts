@@ -1,13 +1,18 @@
-import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
-import * as SQLite from 'expo-sqlite';
 // @ts-ignore
 import migrations from '../drizzle/migrations';
+import { getDB } from './drizzle';
 
+let migrationPromise: Promise<void> | null = null;
+
+// Ensure migrations run only once and reuse the shared database instance.
 export async function runMigrations() {
-  const sqlite = await SQLite.openDatabaseAsync('nomatora.db');
+  if (migrationPromise) return migrationPromise;
 
-  const db = drizzle(sqlite);
+  migrationPromise = (async () => {
+    const db = await getDB();
+    await migrate(db, migrations);
+  })();
 
-  await migrate(db, migrations);
+  return migrationPromise;
 }

@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export interface ExpenseItemData {
     id: string;
+    expenseId: string;
     timestamp: number;
     name: string;
     price: string;

@@ -25,11 +25,19 @@ export default function HomeScreen() {
       </ThemedView>
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="subtitle">Step 1: Try it</ThemedText>
+
         <Pressable onPress={() => router.push('/expenses/(screens)/submit')}>
-          <View>
-            <Text>Submit Expense</Text>
+          <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
+            <Text style={{ color: '#FFFFFF' }}>Submit Expense</Text>
           </View>
         </Pressable>
+
+        <Pressable onPress={() => router.push('/location-selector-map')}>
+          <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
+            <Text style={{ color: '#FFFFFF' }}>Modal Demo</Text>
+          </View>
+        </Pressable>
+
         <ThemedText>
           Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
           Press{' '}

@@ -3,6 +3,7 @@ import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
 import { ExpenseData, ExpenseItemData } from "@/redux/expense/slice";
 import { RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import * as Crypto from 'expo-crypto';
 import { Stack, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -166,12 +167,18 @@ export default function SubmitExpense() {
         router.push('/expenses/(screens)/scan');
     };
 
+    /**
+     * Saves a new item or updates an existing one based on the presence of an ID in the data.
+     * 
+     * @param data ExpenseItemData
+     */
     const handleSaveItem = async (data: ExpenseItemData) => {  
-        const id = data.id ?? Date.now().toString();
+        const id = data.id ?? Crypto.randomUUID().toString();
         const trimmedName = data.name.trim();
         const now = Date.now();
         const payload: ExpenseItemData = {
             id: id,
+            expenseId: 'temp-expense-id',
             name: trimmedName,
             price: data.price,
             timestamp: Date.now(),

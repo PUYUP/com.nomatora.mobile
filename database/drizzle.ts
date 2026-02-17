@@ -1,13 +1,16 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import * as SQLite from 'expo-sqlite';
 
-let _db: ReturnType<typeof drizzle>;
+let dbPromise: Promise<ReturnType<typeof drizzle>> | null = null;
 
+// Lazily open the SQLite database once and reuse the same Drizzle instance.
 export async function getDB() {
-  if (_db) return _db;
+  if (dbPromise) return dbPromise;
 
-  const sqlite = await SQLite.openDatabaseAsync('nomatora.db');
+  dbPromise = (async () => {
+    const sqlite = SQLite.openDatabaseSync('nomatora.db');
+    return drizzle(sqlite);
+  })();
 
-  _db = drizzle(sqlite);
-  return _db;
+  return dbPromise;
 }

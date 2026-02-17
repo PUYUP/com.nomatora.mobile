@@ -1,0 +1,1 @@
+ALTER TABLE `expenses` ADD `status` text DEFAULT 'draft' NOT NULL;

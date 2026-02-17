@@ -66,8 +66,9 @@ export default function RootLayout() {
         <KeyboardProvider>
           <Stack screenOptions={{ headerLeft: (props) => <HeaderBackButton {...props} /> }}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="(modals)" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
             <Stack.Screen name="expenses" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="modal" options={{ presentation: 'fullScreenModal', title: 'Modal' }} />
           </Stack>
         </KeyboardProvider>
         <StatusBar style="auto" />
