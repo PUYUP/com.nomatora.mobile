@@ -1,18 +1,6 @@
+import { CoordsData } from '@/models/location'
 import * as Location from 'expo-location'
 import { Alert, Linking, Platform, ToastAndroid } from 'react-native'
-
-export type LocationSuccess = {
-  coords: {
-    latitude: number
-    longitude: number
-    accuracy: number | null
-    altitude: number | null
-    altitudeAccuracy: number | null
-    heading: number | null
-    speed: number | null
-  }
-  timestamp: number
-}
 
 export type LocationError = {
   code:
@@ -25,7 +13,7 @@ export type LocationError = {
 }
 
 export type LocationResult =
-  | { ok: true; data: LocationSuccess }
+  | { ok: true; data: CoordsData }
   | { ok: false; error: LocationError }
 
 export type ReverseGeocodeSuccess = {
@@ -135,16 +123,15 @@ export const getCurrentLocation = async (
     return {
       ok: true,
       data: {
-        coords: {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy ?? null,
-          altitude: location.coords.altitude ?? null,
-          altitudeAccuracy: location.coords.altitudeAccuracy ?? null,
-          heading: location.coords.heading ?? null,
-          speed: location.coords.speed ?? null,
-        },
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy ?? null,
+        altitude: location.coords.altitude ?? null,
+        altitudeAccuracy: location.coords.altitudeAccuracy ?? null,
+        heading: location.coords.heading ?? null,
+        speed: location.coords.speed ?? null,
         timestamp: location.timestamp,
+        placeName: '', // Placeholder, can be filled in by reverse geocoding if needed
       },
     }
   } catch (error) {

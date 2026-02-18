@@ -50,6 +50,9 @@ export default function ScanExpense() {
                         timestamp: Date.now(),
                         category: 'Uncategorized',
                         quantity: value.quantity,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        expenseId: 'temp-expense-id',
                     };
 
                     dispatch({ type: 'expense/addItem', payload: payload });

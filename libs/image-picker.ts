@@ -5,7 +5,6 @@ import { Linking, Platform } from "react-native";
 export type MediaPermissionState = PermissionStatus;
 
 const SETTINGS_URL = Platform.select({ ios: "app-settings:", android: "app-settings:" });
-
 const isGranted = (status: MediaPermissionState) => status === "granted";
 const needsRequest = (status: MediaPermissionState) => status === "undetermined";
 

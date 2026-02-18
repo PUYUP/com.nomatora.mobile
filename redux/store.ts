@@ -1,15 +1,20 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { expenseSlice } from './expense/slice';
 import { listenerMiddleware } from './listener';
+import { mapPickerSlice } from './map-picker-slice';
 
+// call the listeners so that they are registered
 import './expense/listeners';
 
 export const store = configureStore({
     reducer: {
         expense: expenseSlice.reducer,
+        mapPicker: mapPickerSlice.reducer,
     },
     middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware().concat(listenerMiddleware.middleware),
+        getDefaultMiddleware().concat(
+            listenerMiddleware.middleware
+        ),
 })
 
 // Infer the `RootState` and `AppDispatch` types from the store itself

@@ -7,8 +7,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useDispatch } from 'react-redux';
 
 export default function LocationSelectorMap() {
+  const dispatch = useDispatch();
   const router = useRouter();
   const { returnTo, initialLat, initialLng, initialPlaceName, purpose } = useLocalSearchParams<{
     returnTo?: string;
@@ -22,12 +24,15 @@ export default function LocationSelectorMap() {
   const [centerCoords, setCenterCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [placeName, setPlaceName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isReverseGeocodingLoading, setIsReverseGeocodingLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(true);
   const pinScale = useRef(new Animated.Value(1)).current;
+  const pinTranslate = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
   const lastRegionRef = useRef<Region | null>(null);
   const isDraggingRef = useRef(false);
+  const geoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialized = useRef(false);
 
   const purposeLabel = purpose === 'origin'
@@ -61,13 +66,18 @@ export default function LocationSelectorMap() {
         const placeName = initialPlaceName ?? '';
         setPlaceName(placeName);
 
-        // todo: redux
-        // emitLocationSelection({
-        //   latitude: parsedLat,
-        //   longitude: parsedLng,
-        //   placeName: placeName,
-        //   purpose,
-        // });
+        dispatch({ 
+          type: 'mapPicker/setLocation', 
+          payload: { 
+            requestId: 'expense-location', 
+            location: {
+              latitude: parsedLat,
+              longitude: parsedLng,
+              placeName: placeName,
+              purpose: purpose ?? '',
+            }
+          } 
+        });
 
         setIsRequestingPermission(false);
         setIsLoading(false);
@@ -87,11 +97,18 @@ export default function LocationSelectorMap() {
         setCenterCoords({ latitude: saved.latitude, longitude: saved.longitude });
         setPlaceName(saved.placeName ?? '');
 
-        // todo: redux
-        // emitLocationSelection({
-        //   ...saved,
-        //   purpose,
-        // });
+        dispatch({ 
+          type: 'mapPicker/setLocation', 
+          payload: { 
+            requestId: 'expense-location', 
+            location: {
+              latitude: parsedLat,
+              longitude: parsedLng,
+              placeName: placeName,
+              purpose: purpose ?? '',
+            }
+          } 
+        });
 
         setIsRequestingPermission(false);
         setIsLoading(false);
@@ -102,27 +119,28 @@ export default function LocationSelectorMap() {
       setIsRequestingPermission(true);
       const location = await getCurrentLocation();
       if (location.ok) {
-        const coords = location.data.coords;
         const nextRegion: Region = {
-          latitude: coords.latitude,
-          longitude: coords.longitude,
+          latitude: location.data.latitude,
+          longitude: location.data.longitude,
           latitudeDelta: initialDelta,
           longitudeDelta: initialDelta,
         };
         setRegion(nextRegion);
         lastRegionRef.current = nextRegion;
-        setCenterCoords({ latitude: coords.latitude, longitude: coords.longitude });
-        const geocoded = await reverseGeocodeLocation(coords.latitude, coords.longitude);
+        setCenterCoords({ latitude: location.data.latitude, longitude: location.data.longitude });
+        const geocoded = await reverseGeocodeLocation(location.data.latitude, location.data.longitude);
         const placeName = geocoded.ok ? geocoded.data.name : '';
         setPlaceName(placeName);
 
-        // todo: redux
-        // emitLocationSelection({
-        //   latitude: coords.latitude,
-        //   longitude: coords.longitude,
-        //   placeName: placeName,
-        //   purpose,
-        // });
+        dispatch({ 
+          type: 'mapPicker/setLocation', 
+          payload: { 
+            requestId: 'expense-location', 
+            location: {
+              placeName: placeName,
+            } 
+          } 
+        });
 
         setIsRequestingPermission(false);
       } else {
@@ -141,11 +159,25 @@ export default function LocationSelectorMap() {
     const placeName = geocoded.ok ? geocoded.data.name : '';
     setPlaceName(placeName);
 
-    // todo: redux
-    // emitLocationSelection({ latitude, longitude, placeName, purpose });
+    dispatch({ 
+      type: 'mapPicker/setLocation', 
+      payload: { 
+        requestId: 'expense-location', 
+        location: {
+          latitude: latitude,
+          longitude: longitude,
+          placeName: placeName,
+          purpose: purpose ?? '',
+        }
+      } 
+    });
+
+    setIsReverseGeocodingLoading(false);
   };
 
   const handleRegionChangeComplete = async (nextRegion: Region) => {
+    setIsReverseGeocodingLoading(true);
+
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
       Animated.spring(pinScale, {
@@ -154,8 +186,15 @@ export default function LocationSelectorMap() {
         speed: 20,
         bounciness: 6,
       }).start();
+      Animated.spring(pinTranslate, {
+        toValue: 0,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 6,
+      }).start();
     }
     if (!hasInitialized.current) {
+      setIsReverseGeocodingLoading(false);
       return;
     }
 
@@ -171,7 +210,15 @@ export default function LocationSelectorMap() {
 
     lastRegionRef.current = nextRegion;
     setCenterCoords(center);
-    await updateLocationFromCoords(center.latitude, center.longitude);
+
+    if (geoDebounceRef.current) {
+      clearTimeout(geoDebounceRef.current);
+    }
+    geoDebounceRef.current = setTimeout(() => {
+      updateLocationFromCoords(center.latitude, center.longitude).finally(() => {
+        setIsReverseGeocodingLoading(false);
+      });
+    }, 1000);
   };
 
   const handleRegionChange = () => {
@@ -183,6 +230,17 @@ export default function LocationSelectorMap() {
         speed: 20,
         bounciness: 6,
       }).start();
+      Animated.spring(pinTranslate, {
+        toValue: -6,
+        useNativeDriver: true,
+        speed: 20,
+        bounciness: 6,
+      }).start();
+    }
+
+    if (geoDebounceRef.current) {
+      clearTimeout(geoDebounceRef.current);
+      geoDebounceRef.current = null;
     }
   };
 
@@ -201,24 +259,23 @@ export default function LocationSelectorMap() {
   };
 
   const handleConfirm = () => {
-    if (!centerCoords) {
+    if (!centerCoords || isReverseGeocodingLoading) {
       return;
     }
     const payload = {
       latitude: String(centerCoords.latitude),
       longitude: String(centerCoords.longitude),
-      place_name: placeName ?? '',
-      purpose,
+      placeName: placeName ?? '',
+      purpose: purpose ?? '',
     };
 
-    // todo: redux
-    // emitLocationSelected({
-    //   latitude: centerCoords.latitude,
-    //   longitude: centerCoords.longitude,
-    //   placeName: placeName ?? '',
-    //   purpose,
-    // });
-
+    dispatch({ 
+      type: 'mapPicker/setLocation', 
+      payload: { 
+        requestId: 'expense-location', 
+        location: payload 
+      } 
+    });
 
     if (returnTo) {
       router.replace({ pathname: returnTo as any, params: payload });
@@ -297,7 +354,7 @@ export default function LocationSelectorMap() {
                 onRegionChangeComplete={handleRegionChangeComplete}
               />
               <View style={styles.centerMarker} pointerEvents="none">
-                <Animated.View style={{ transform: [{ scale: pinScale }] }}>
+                <Animated.View style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}>
                   <View style={{ width: 40, height: 64 }}>
                     <MapMarker width={40} height={64} />
                   </View>
@@ -336,11 +393,15 @@ export default function LocationSelectorMap() {
             <Text style={styles.secondaryButtonText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.primaryButton, !centerCoords && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, (!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled]}
             onPress={handleConfirm}
-            disabled={!centerCoords}
+            disabled={!centerCoords || isReverseGeocodingLoading}
           >
-            <Text style={styles.primaryButtonText}>Confirm</Text>
+            {(!centerCoords || isReverseGeocodingLoading) ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Confirm</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>

@@ -4,7 +4,7 @@ import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-it
 import { eq } from "drizzle-orm";
 import * as Crypto from "expo-crypto";
 import { startAppListening } from '../listener';
-import { addItem, removeItem, updateItem } from './slice';
+import { addItem, ExpenseData, getItems, removeItem, updateExpense, updateItem } from './slice';
 
 const ensureDraftExpenseId = async (db: Awaited<ReturnType<typeof getDB>>) => {
     const [draft] = await db
@@ -21,14 +21,53 @@ const ensureDraftExpenseId = async (db: Awaited<ReturnType<typeof getDB>>) => {
     await db.insert(expensesSchema).values({
         id,
         status: "draft",
-        createdAt: now,
-        updatedAt: now,
+        created_at: now,
+        updated_at: now,
     });
 
     return id;
 };
 
-startAppListening({
+const upsertExpenseMeta = async (
+    db: Awaited<ReturnType<typeof getDB>>,
+    expenseId: string,
+    fields: Partial<ExpenseData>,
+) => {
+    const now = Date.now();
+
+    // Try update first; if no row, insert draft.
+    const updated = await db
+        .update(expensesSchema)
+        .set({
+            place_name: fields.placeName ?? null,
+            note: fields.note ?? null,
+            latitude: fields.latitude ? parseFloat(fields.latitude) : 0,
+            longitude: fields.longitude ? parseFloat(fields.longitude) : 0,
+            status: fields.status ?? 'draft',
+            updated_at: now,
+        })
+        .where(eq(expensesSchema.id, expenseId))
+        .returning({ id: expensesSchema.id });
+
+    if (updated.length > 0) return updated[0].id;
+
+    await db.insert(expensesSchema).values({
+        id: expenseId,
+        status: "draft",
+        place_name: fields.placeName ?? null,
+        note: fields.note ?? null,
+        latitude: fields.latitude ? parseFloat(fields.latitude) : 0,
+        longitude: fields.longitude ? parseFloat(fields.longitude) : 0,
+        created_at: now,
+        updated_at: now,
+    });
+
+    return expenseId;
+};
+
+const subscriptions: Array<() => void> = [];
+
+subscriptions.push(startAppListening({
     actionCreator: addItem,
     effect: async (action) => {
         const db = await getDB();
@@ -38,35 +77,48 @@ startAppListening({
 
         const item = await db.insert(expenseItemsSchema).values({
             ...action.payload,
-            expenseId,
+            expense_id: expenseId,
             price: parseFloat(action.payload.price),
-        }).onConflictDoUpdate({
-            target: expenseItemsSchema.id,
-            set: {
-                ...action.payload,
-                expenseId,
-                price: parseFloat(action.payload.price),
-            },
+            created_at: action.payload.createdAt || Date.now(),
+            updated_at: action.payload.updatedAt || Date.now(),
         }).returning();
 
         console.log('Inserted item with ID:', item);
     },
-});
+}));
 
-startAppListening({
+subscriptions.push(startAppListening({
     actionCreator: updateItem,
     effect: async (action) => {
         const db = await getDB();
         const item = await db.update(expenseItemsSchema).set({
             ...action.payload,
             price: parseFloat(action.payload.price),
-        }).where(eq(expenseItemsSchema.id, action.payload.id)).returning();
+            updated_at: Date.now(),
+        })
+        .where(eq(expenseItemsSchema.id, action.payload.id))
+        .returning();
 
         console.log('Updated item with ID:', item);
     },
-});
+}));
 
-startAppListening({
+subscriptions.push(startAppListening({
+    actionCreator: getItems,
+    effect: async (action, thunk) => {
+        const db = await getDB();
+        const expenseId = await ensureDraftExpenseId(db);
+        const items = db.select().from(expenseItemsSchema)
+            .where(eq(expenseItemsSchema.expense_id, expenseId))
+            .all();
+
+        if (items.length > 0) {
+            thunk.dispatch({ type: 'expense/setItems', payload: items });
+        }
+    },
+}));
+
+subscriptions.push(startAppListening({
     actionCreator: removeItem,
     effect: async (action) => {
         const db = await getDB();
@@ -76,5 +128,29 @@ startAppListening({
 
         console.log('Deleted item with ID:', item);
     },
-});
+}));
 
+subscriptions.push(startAppListening({
+    actionCreator: updateExpense,
+    effect: async (action) => {
+        const db = await getDB();
+        const expenseId = await ensureDraftExpenseId(db);
+
+        await upsertExpenseMeta(db, expenseId, {
+            placeName: action.payload.placeName,
+            note: action.payload.note ? action.payload.note : '',
+            latitude: action.payload.latitude,
+            longitude: action.payload.longitude,
+            status: 'publish',
+        });
+
+        console.log('Upserted expense with ID:', expenseId);
+    },
+}));
+
+export const unsubscribeExpenseListeners = () => {
+    while (subscriptions.length) {
+        const unsub = subscriptions.pop();
+        if (unsub) unsub();
+    }
+};

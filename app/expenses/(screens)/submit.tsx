@@ -1,10 +1,10 @@
 import ExpenseItem from "@/components/partials/expense-item";
 import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
 import { ExpenseData, ExpenseItemData } from "@/redux/expense/slice";
-import { RootState } from "@/redux/store";
+import { AppDispatch, RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import * as Crypto from 'expo-crypto';
-import { Stack, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
@@ -80,7 +80,7 @@ export default function SubmitExpense() {
     // redux
     const expenseItems = useSelector((state: RootState) => state.expense.items);
     const expenseDraft = useSelector((state: RootState) => state.expense);
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -93,7 +93,6 @@ export default function SubmitExpense() {
     const editorScrollRef = useRef<ScrollView | null>(null);
     const shouldFocusNameRef = useRef(false);
     const inlineCategoryY = useRef(0);
-    const placeName = '291-275 Bedford Ave, Brooklyn, NY 11211, United States';
 
     // item form
     const {
@@ -124,7 +123,6 @@ export default function SubmitExpense() {
 
     const categoryKeyExtractor = useCallback((item: string) => item, []);
     const focusNameInput = useCallback(() => {
-
         if (!shouldFocusNameRef.current) return;
         if (editedItem) return; // do not focus if it's editing an existing item
 
@@ -138,8 +136,23 @@ export default function SubmitExpense() {
         });
     }, [editedItem]);
 
+    // get loation based on their id
+    // in this case the id is 'expense-location'
+    const location = useSelector(
+        (state: RootState) => state.mapPicker.locations['expense-location']
+    )
+
     const handleLocationPress = () => {
-        dispatch({ type: 'expense/updateExpense', payload: { placeName: expenseDraft.placeName ? '' : placeName } });
+        dispatch({ type: 'mapPicker/openMap', payload: { requestId: 'expense-location' } });
+        router.push({
+            pathname: '/(modals)/location-selector-map',
+            params: {
+                purpose: 'expense',
+                initialLat: location?.latitude?.toString(),
+                initialLng: location?.longitude?.toString(),
+                initialPlaceName: location?.placeName,
+            }
+        });
     };
 
     const handleManualAdd = () => {
@@ -152,7 +165,6 @@ export default function SubmitExpense() {
 
     const handleScanAdd = async () => {
         const { granted, status } = await ensureCameraPermission();
-        console.log('Camera permission status:', status);
         if (!granted) {
             Alert.alert(
                 'Camera permission needed',
@@ -173,12 +185,15 @@ export default function SubmitExpense() {
      * @param data ExpenseItemData
      */
     const handleSaveItem = async (data: ExpenseItemData) => {  
+        console.log('Saving item with data:', data);
+
         const id = data.id ?? Crypto.randomUUID().toString();
+        const expenseId = data.expenseId ?? 'temp-expense-id';
         const trimmedName = data.name.trim();
         const now = Date.now();
         const payload: ExpenseItemData = {
             id: id,
-            expenseId: 'temp-expense-id',
+            expenseId: expenseId,
             name: trimmedName,
             price: data.price,
             timestamp: Date.now(),
@@ -202,11 +217,10 @@ export default function SubmitExpense() {
         setEditedItem(null);
     }
 
-    const saveExpense = (data: ExpenseData) => {
-        dispatch({ type: 'expense/updateExpense', payload: { note: data.note } });
+    const saveExpenseHandler = (data: ExpenseData) => {
         const payload = {
             ...expenseDraft,
-            note: data.note,
+            note: data.note || '',
         };
 
         if (payload.items.length === 0 || payload.placeName === '') {
@@ -215,7 +229,18 @@ export default function SubmitExpense() {
         }
 
         resetExpenseForm();
+
+        // Save expense to database and sync with server in the background
+        const expensePayload = {
+            status: 'publish',
+            place_name: payload.placeName,
+            latitude: payload.latitude ? parseFloat(payload.latitude) : null,
+            longitude: payload.longitude ? parseFloat(payload.longitude) : null,
+            note: payload.note,
+        }
+        dispatch({ type: 'expense/updateExpense', payload: expensePayload });
         dispatch({ type: 'expense/resetState' });
+        dispatch({ type: 'mapPicker/clearLocation', payload: { requestId: 'expense-location' } });
     }
 
     const handleCloseEditor = () => {
@@ -276,6 +301,25 @@ export default function SubmitExpense() {
         dispatch({ type: 'expense/removeItem', payload: id });
     };
 
+    const loadExpenseDraft = async () => {
+        dispatch({ type: 'expense/getItems', payload: {} });
+    }
+
+    // WARN: make sure to call this on unmount to prevent multiple listeners being active when user opens/closes this screen multiple times. This can cause duplicated entries and other weird bugs.
+    useFocusEffect(
+        useCallback(() => {
+            // loadExpenseDraft();
+
+            return () => {
+                // unsubscribeExpenseListeners();
+            };
+        }, [])  
+    );
+
+    useEffect(() => {
+        loadExpenseDraft();
+    }, []);
+
     useEffect(() => {
         if (!showEditor) return;
         shouldFocusNameRef.current = true;
@@ -325,6 +369,19 @@ export default function SubmitExpense() {
         };
     }, [itemValues]);
 
+    useEffect(() => {
+        console.log('Location updated:', location);
+        if (!location || !location.placeName) return;
+        dispatch({ 
+            type: 'expense/updateExpense', 
+            payload: { 
+                placeName: location?.placeName || '',
+                latitude: location?.latitude || 0,
+                longitude: location?.longitude || 0,
+            } 
+        });
+    }, [location]);
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
             <Stack.Screen
@@ -352,9 +409,9 @@ export default function SubmitExpense() {
                     keyboardShouldPersistTaps="handled"
                     renderItem={({ item }) => (
                         <ExpenseItem
-                            {...item}
-                            onRemove={() => handleRemoveItem(item.id)}
-                            onEdit={() => handleEditItem(item.id)}
+                            item={item}
+                            onRemove={(id) => handleRemoveItem(id)}
+                            onEdit={(id) => handleEditItem(id)}
                         />
                     )}
                     keyExtractor={item => item.id}
@@ -385,7 +442,9 @@ export default function SubmitExpense() {
                     <View style={styles.noteContainer}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <MaterialCommunityIcons name="map-marker-radius" size={16} color="#555" />
-                            <Text style={styles.locationText} numberOfLines={1}>{expenseDraft.placeName ? expenseDraft.placeName : 'Location not set'}</Text>
+                            <Text style={styles.locationText} numberOfLines={1}>
+                                {expenseDraft.placeName ? expenseDraft.placeName : 'Location not set'}
+                            </Text>
                         </View>
     
                         <Controller
@@ -406,7 +465,7 @@ export default function SubmitExpense() {
                     </View>
 
                     <View style={styles.rowActions}>
-                        <TouchableOpacity style={[styles.primaryButton, styles.halfWidthButton]} onPress={(handleSaveExpense(saveExpense))}>
+                        <TouchableOpacity style={[styles.primaryButton, styles.halfWidthButton]} onPress={(handleSaveExpense(saveExpenseHandler))}>
                             <Text style={styles.primaryButtonText}>Save Expense</Text>
                         </TouchableOpacity>
 

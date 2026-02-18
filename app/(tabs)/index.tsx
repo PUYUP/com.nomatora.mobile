@@ -5,10 +5,30 @@ import { HelloWave } from '@/components/hello-wave';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { getDB } from '@/database/drizzle';
 import { Link, useRouter } from 'expo-router';
+
+import { expenses as expensesSchema } from "@/database/schema/expense";
+import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
+import { useDispatch } from 'react-redux';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const dispatch = useDispatch();
+
+  const deleteDBHandler = async () => {
+    const db = await getDB();
+
+    try {
+      await db.delete(expensesSchema).execute();
+      await db.delete(expenseItemsSchema).execute();
+      dispatch({ type: 'expense/resetState' });
+
+      console.log("Database deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete database", error);
+    }
+  }
   
   return (
     <ParallaxScrollView
@@ -35,6 +55,12 @@ export default function HomeScreen() {
         <Pressable onPress={() => router.push('/location-selector-map')}>
           <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
             <Text style={{ color: '#FFFFFF' }}>Modal Demo</Text>
+          </View>
+        </Pressable>
+
+        <Pressable onPress={async () => await deleteDBHandler()}>
+          <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
+            <Text style={{ color: '#FFFFFF' }}>Delete DB</Text>
           </View>
         </Pressable>
 

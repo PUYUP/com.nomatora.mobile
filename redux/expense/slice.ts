@@ -15,12 +15,19 @@ export interface ExpenseItemData {
 export interface ExpenseData {
     items: ExpenseItemData[];
     placeName: string;
+    latitude: string;
+    longitude: string | null;
+    status: 'draft' | 'publish';
     note?: string;
 }
 
 const initialState: ExpenseData = {
     items: [],
     placeName: '',
+    latitude: '',
+    longitude: '',
+    status: 'draft',
+    note: '',
 };
 
 export const expenseSlice = createSlice({
@@ -51,16 +58,25 @@ export const expenseSlice = createSlice({
 
             return state;
         },
-        updateExpense: (state, action: PayloadAction<ExpenseData>) => {
-            return {
-                ...state,
-                ...action.payload,
-            };
-        },
         removeItem: (state, action: PayloadAction<string>) => {
             return {
                 ...state,
                 items: state.items.filter((item) => item.id !== action.payload),
+            };
+        },
+        getItems: (state, action: PayloadAction<{}>) => {
+            return state;
+        },
+        setItems: (state, action: PayloadAction<ExpenseItemData[]>) => {
+            return {
+                ...state,
+                items: action.payload,
+            };
+        },
+        updateExpense: (state, action: PayloadAction<ExpenseData>) => {
+            return {
+                ...state,
+                ...action.payload,
             };
         },
         resetState: () => {
@@ -69,6 +85,13 @@ export const expenseSlice = createSlice({
     },
 });
 
-export const { addItem, updateItem, updateExpense, removeItem, resetState } = expenseSlice.actions;
+export const { 
+    addItem, 
+    updateItem, 
+    updateExpense, 
+    removeItem, 
+    getItems, 
+    resetState 
+} = expenseSlice.actions;
 
 export default expenseSlice.reducer;

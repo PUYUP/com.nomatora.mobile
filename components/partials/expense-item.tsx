@@ -25,35 +25,38 @@ const SIZES = {
     quantitySpacing: 16,
 };
 
-interface ExpenseItemProps extends ExpenseItemData {
-    id: string;
+interface ExpenseItemProps {
+    item: ExpenseItemData;
     onRemove?: (id: string) => void;
     onEdit?: (id: string) => void;
 }
 
-export default function ExpenseItem({ id, name, price, category, onRemove, onEdit }: ExpenseItemProps) {
+export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps) {
+    if (!item) return null;
+    
+    const { id, name, category, price } = item;
     const dispatch = useDispatch();
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState(item.quantity ?? 1);
     const displayPrice = parseFloat(price ?? '0');
     const totalPrice = displayPrice * quantity;
 
-    const handleDecrease = () => {
+    const handleDecrease = (id: string) => {
         setQuantity((prev) => {
             const newQuantity = prev > 1 ? prev - 1 : prev;
-            dispatch({ type: 'expense/updateItem', payload: { id, quantity: newQuantity } });
+            dispatch({ type: 'expense/updateItem', payload: { ...item, quantity: newQuantity } });
             return newQuantity;
         });
     };
 
-    const handleIncrease = () => {
+    const handleIncrease = (id: string) => {
         setQuantity((prev) => {
             const newQuantity = prev + 1;
-            dispatch({ type: 'expense/updateItem', payload: { id, quantity: newQuantity } });
+            dispatch({ type: 'expense/updateItem', payload: { ...item, quantity: newQuantity } });
             return newQuantity;
         });
     };
 
-    const handleRemove = () => {
+    const handleRemove = (id: string) => {
         Alert.alert(
             "Remove Item",
             "Are you sure you want to remove this item?",
@@ -86,17 +89,17 @@ export default function ExpenseItem({ id, name, price, category, onRemove, onEdi
 
             <View style={styles.bottomRow}>
                 <View style={styles.quantityContainer}>
-                    <TouchableOpacity onPress={handleDecrease} style={styles.quantityButton}>
+                    <TouchableOpacity onPress={() => handleDecrease(id)} style={styles.quantityButton}>
                         <MaterialCommunityIcons name="minus" size={18} color="#666" />
                     </TouchableOpacity>
                     <Text style={styles.quantityText}>{quantity}</Text>
-                    <TouchableOpacity onPress={handleIncrease} style={styles.quantityButton}>
+                    <TouchableOpacity onPress={() => handleIncrease(id)} style={styles.quantityButton}>
                         <MaterialCommunityIcons name="plus" size={18} color="#666" />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity onPress={handleRemove} style={styles.removeButton}>
+                    <TouchableOpacity onPress={() => handleRemove(id)} style={styles.removeButton}>
                         <Text style={styles.removeButtonText}>Remove</Text>
                     </TouchableOpacity>
 
