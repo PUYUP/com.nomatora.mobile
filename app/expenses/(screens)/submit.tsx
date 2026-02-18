@@ -1,13 +1,16 @@
 import ExpenseItem from "@/components/partials/expense-item";
+import { expenses as expensesSchema } from "@/database/schema/expense";
+import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
+import { itemCategories } from "@/database/schema/expense-item-category";
 import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
-import { ExpenseData, ExpenseItemData } from "@/redux/expense/slice";
+import { useCreateMutation as createCategoryMudation, useGetAllQuery } from "@/redux/expense/category-api";
+import { ExpenseData, ExpenseItemData, useAddItemMutation, useCreateMutation, useDeleteItemMutation, useGetItemsQuery, useUpdateExpenseMutation, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import { AppDispatch, RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import * as Crypto from 'expo-crypto';
-import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
-import { Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,15 +26,16 @@ const CATEGORY_OPTIONS = [
 ];
 
 const CATEGORY_COLUMNS = 2;
+const MAP_SELECTOR_ID = 'expense-location';
 
 const CategoryChip = memo(function CategoryChip({
     item,
     selected,
     onSelect,
 }: {
-    item: string;
+    item: typeof itemCategories.$inferSelect;
     selected: boolean;
-    onSelect: (value: string) => void;
+    onSelect: (item: typeof itemCategories.$inferSelect) => void;
 }) {
     return (
         <TouchableOpacity
@@ -44,7 +48,7 @@ const CategoryChip = memo(function CategoryChip({
                     size={16}
                     color={selected ? '#2E7D32' : '#9AA0A6'}
                 />
-                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{item}</Text>
+                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{item.name}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -78,17 +82,29 @@ export default function SubmitExpense() {
     }, [height, insets.bottom]);
     
     // redux
-    const expenseItems = useSelector((state: RootState) => state.expense.items);
-    const expenseDraft = useSelector((state: RootState) => state.expense);
     const dispatch = useDispatch<AppDispatch>();
     
+    const [createExpense, { data: createdExpenseData }] = useCreateMutation();
+    const [updateExpense, { data: updatedExpenseData }] = useUpdateExpenseMutation();
+    const [addItem] = useAddItemMutation();
+    const [updateItem] = useUpdateItemMutation();
+    const [deleteItem] = useDeleteItemMutation(); 
+    const [draftedExpense, setDraftedExpense] = useState<typeof expensesSchema.$inferSelect | null>(null);
+    const [draftedItems, setDraftedItems] = useState<typeof expenseItemsSchema.$inferSelect[]>([]);
+    const { data: items, isLoading: isItemsLoading } = useGetItemsQuery(draftedExpense?.id!, {
+        skip: !draftedExpense?.id,
+    });
+
+    // category
+    const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
+    const [createCategory] = createCategoryMudation();
+
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-    const [categories, setCategories] = useState<string[]>(CATEGORY_OPTIONS);
     const [showEditor, setShowEditor] = useState(false);
     const [addCategoryVisible, setAddCategoryVisible] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
-    const [editedItem, setEditedItem] = useState<ExpenseItemData | null>(null);
+    const [editedItem, setEditedItem] = useState<typeof expenseItemsSchema.$inferSelect | null>(null);
     const itemNameRef = useRef<TextInput | null>(null);
     const editorScrollRef = useRef<ScrollView | null>(null);
     const shouldFocusNameRef = useRef(false);
@@ -110,18 +126,21 @@ export default function SubmitExpense() {
     } = useForm<ExpenseData>();
 
     const itemValues = useWatch({ control: itemFormControl, name: ['name', 'price', 'category'] });
-    const selectedCategory = useWatch({ control: itemFormControl, name: 'category' });
-    const renderCategoryItem = useCallback(({ item }: { item: string }) => {
+    const selectedCategory = useWatch({ control: itemFormControl, name: 'category' }) || editedItem?.category || null;
+    const categories = useMemo(() => {
+        return fetchedCategories?.map((c) => c) ?? [];
+    }, [fetchedCategories]);
+    const renderCategoryItem = useCallback(({ item }: { item: typeof itemCategories.$inferSelect }) => {
         return (
             <CategoryChip
                 item={item}
-                selected={selectedCategory === item}
-                onSelect={(value) => setItemFormValue('category', value)}
+                selected={selectedCategory ? (selectedCategory === item.id || selectedCategory === item.name) : false}
+                onSelect={(item) => setItemFormValue('category', item.id)}
             />
         );
     }, [selectedCategory, setItemFormValue]);
 
-    const categoryKeyExtractor = useCallback((item: string) => item, []);
+    const categoryKeyExtractor = useCallback((item: typeof itemCategories.$inferSelect) => item.id , []);
     const focusNameInput = useCallback(() => {
         if (!shouldFocusNameRef.current) return;
         if (editedItem) return; // do not focus if it's editing an existing item
@@ -136,24 +155,35 @@ export default function SubmitExpense() {
         });
     }, [editedItem]);
 
-    // get loation based on their id
+    // get location based on their id
     // in this case the id is 'expense-location'
-    const location = useSelector(
-        (state: RootState) => state.mapPicker.locations['expense-location']
+    const confirmedLocation = useSelector(
+        (state: RootState) => state.mapPicker.locations[MAP_SELECTOR_ID]
     )
 
     const handleLocationPress = () => {
-        dispatch({ type: 'mapPicker/openMap', payload: { requestId: 'expense-location' } });
+        dispatch({ type: 'mapPicker/openMap', payload: { requestId: MAP_SELECTOR_ID } });
         router.push({
             pathname: '/(modals)/location-selector-map',
             params: {
                 purpose: 'expense',
-                initialLat: location?.latitude?.toString(),
-                initialLng: location?.longitude?.toString(),
-                initialPlaceName: location?.placeName,
+                initialLat: confirmedLocation?.latitude?.toString(),
+                initialLng: confirmedLocation?.longitude?.toString(),
+                initialPlaceName: confirmedLocation?.placeName,
+                requestId: MAP_SELECTOR_ID,
             }
         });
     };
+
+    const handleSelectCurrency = () => {
+        router.push({
+            pathname: '/(modals)/currency-selector',
+            params: {
+                purpose: 'expense',
+                initialCurrency: 'USD',
+            }
+        });
+    }
 
     const handleManualAdd = () => {
         resetItemForm();
@@ -184,33 +214,42 @@ export default function SubmitExpense() {
      * 
      * @param data ExpenseItemData
      */
-    const handleSaveItem = async (data: ExpenseItemData) => {  
-        console.log('Saving item with data:', data);
+    const saveItemHandler = async (data: ExpenseItemData) => {  
+        if (!draftedExpense) return;
 
-        const id = data.id ?? Crypto.randomUUID().toString();
-        const expenseId = data.expenseId ?? 'temp-expense-id';
-        const trimmedName = data.name.trim();
         const now = Date.now();
-        const payload: ExpenseItemData = {
-            id: id,
-            expenseId: expenseId,
-            name: trimmedName,
-            price: data.price,
-            timestamp: Date.now(),
-            category: data.category || 'Uncategorized',
+        const payload: Omit<typeof expenseItemsSchema.$inferSelect, 'id'> = {
+            expense_id: draftedExpense.id!,
+            name: data.name.trim(),
+            price: parseFloat(data.price),
+            category: data.category || '',
             quantity: data.quantity ? data.quantity : 1,
-            createdAt: now,
-            updatedAt: now,
-        };
-
-        if (data.id) {
-            // update existing item
-            dispatch({ type: 'expense/updateItem', payload: payload });
-        } else {
-            // add new item
-            dispatch({ type: 'expense/addItem', payload });
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+            sync_status: 'pending',
+            latitude: draftedExpense.latitude ?? null,
+            longitude: draftedExpense.longitude ?? null,
+            place_name: draftedExpense.place_name ?? null,
         }
-    
+        
+        if (editedItem) {
+            updateItem({ 
+                id: editedItem.id, 
+                payload: {
+                    name: data.name.trim(),
+                    price: parseFloat(data.price),
+                    category: data.category || '',
+                    latitude: draftedExpense.latitude ?? null,
+                    longitude: draftedExpense.longitude ?? null,
+                    place_name: draftedExpense.place_name ?? null,
+                    updated_at: now,
+                } 
+            });
+        } else {
+            addItem(payload);
+        }
+
         resetItemForm();
         setShowEditor(false);
         shouldFocusNameRef.current = false;
@@ -218,29 +257,20 @@ export default function SubmitExpense() {
     }
 
     const saveExpenseHandler = (data: ExpenseData) => {
-        const payload = {
-            ...expenseDraft,
+        const payload: Partial<typeof expensesSchema.$inferSelect> = {
+            ...draftedExpense,
             note: data.note || '',
+            status: 'publish', // no longer draft when saving
         };
 
-        if (payload.items.length === 0 || payload.placeName === '') {
+        if (draftedItems.length === 0 || (payload.place_name === '' || !payload.place_name)) {
             Alert.alert('No items or place', 'Please add at least one item and set a place before saving the expense.');
             return;
         }
 
+        updateExpense({ id: draftedExpense?.id ?? '', payload: payload });
         resetExpenseForm();
-
-        // Save expense to database and sync with server in the background
-        const expensePayload = {
-            status: 'publish',
-            place_name: payload.placeName,
-            latitude: payload.latitude ? parseFloat(payload.latitude) : null,
-            longitude: payload.longitude ? parseFloat(payload.longitude) : null,
-            note: payload.note,
-        }
-        dispatch({ type: 'expense/updateExpense', payload: expensePayload });
-        dispatch({ type: 'expense/resetState' });
-        dispatch({ type: 'mapPicker/clearLocation', payload: { requestId: 'expense-location' } });
+        dispatch({ type: 'mapPicker/clearLocation', payload: { requestId: MAP_SELECTOR_ID } });
     }
 
     const handleCloseEditor = () => {
@@ -258,17 +288,22 @@ export default function SubmitExpense() {
         const trimmed = newCategoryName.trim();
         if (!trimmed) return;
 
-        if (categories.length >= 10) {
+        if (categories && categories.length >= 10) {
             Alert.alert('Category limit reached', 'You can only keep up to 10 categories.');
             return;
         }
 
-        setCategories((prev) => {
-            const exists = prev.some((cat) => cat.toLowerCase() === trimmed.toLowerCase());
-            if (exists) return prev;
-            return [...prev, trimmed];
-        });
-        setItemFormValue('category', trimmed);
+        createCategory({ name: trimmed });
+        
+        /**
+         * Only auto-select category when:
+         * - Not editing existing item
+         * - AND there is no selected category yet
+         */
+        if (!editedItem && !selectedCategory) {
+            setItemFormValue('category', trimmed);
+        }
+
         setNewCategoryName('');
         setAddCategoryVisible(false);
     };
@@ -278,47 +313,41 @@ export default function SubmitExpense() {
         setAddCategoryVisible(false);
     };
 
-    const handleEditItem = (id: string) => {
-        const found = expenseItems.find((item) => item.id === id);
-        if (!found) return;
+    const handleEditItem = (item: typeof expenseItemsSchema.$inferSelect) => {
+        setEditedItem(item);
 
-        for (const key in found) {
-            const _k = key as keyof ExpenseItemData;
-            if (_k === 'price') {
-                setItemFormValue(_k, found[_k].toString());
-            } else {
-                setItemFormValue(_k, found[_k]);
-            }
-        }
+        // set values to form
+        setItemFormValue('name', item.name);
+        setItemFormValue('price', item.price.toString());
+        setItemFormValue('category', item.category || '');
 
-        setEditedItem(found);
         setAddCategoryVisible(false);
         shouldFocusNameRef.current = false; // do not autofocus when editing
         setShowEditor(true);
     };
 
-    const handleRemoveItem = (id: string) => {
-        dispatch({ type: 'expense/removeItem', payload: id });
+    const handleRemoveItem = (item: typeof expenseItemsSchema.$inferSelect) => {
+        console.log('Removing item with ID:', item.id);
+        deleteItem(item.id);
     };
 
-    const loadExpenseDraft = async () => {
-        dispatch({ type: 'expense/getItems', payload: {} });
-    }
-
-    // WARN: make sure to call this on unmount to prevent multiple listeners being active when user opens/closes this screen multiple times. This can cause duplicated entries and other weird bugs.
-    useFocusEffect(
-        useCallback(() => {
-            // loadExpenseDraft();
-
-            return () => {
-                // unsubscribeExpenseListeners();
-            };
-        }, [])  
-    );
+    useEffect(() => {
+        // create or get draft expense when screen mounts
+        createExpense();
+    }, []);
 
     useEffect(() => {
-        loadExpenseDraft();
-    }, []);
+        if (createdExpenseData || updatedExpenseData) {
+            if (createdExpenseData) setDraftedExpense(createdExpenseData);
+            if (updatedExpenseData) setDraftedExpense(updatedExpenseData);
+        }
+    }, [createdExpenseData, updatedExpenseData]);
+
+    useEffect(() => {
+        if (items && items.length > 0) {
+            setDraftedItems(items);
+        }
+    }, [items]);
 
     useEffect(() => {
         if (!showEditor) return;
@@ -357,7 +386,7 @@ export default function SubmitExpense() {
                 setIsKeyboardVisible(false);
 
                 const noValues = itemValues.every((value) => !value || value === '');
-                if (noValues && showEditor) {
+                if (noValues && showEditor && !itemNameRef.current?.isFocused()) {
                     handleCloseEditor();
                 }
             }
@@ -370,70 +399,86 @@ export default function SubmitExpense() {
     }, [itemValues]);
 
     useEffect(() => {
-        console.log('Location updated:', location);
-        if (!location || !location.placeName) return;
-        dispatch({ 
-            type: 'expense/updateExpense', 
-            payload: { 
-                placeName: location?.placeName || '',
-                latitude: location?.latitude || 0,
-                longitude: location?.longitude || 0,
-            } 
+        if (!confirmedLocation || !confirmedLocation.placeName || !draftedExpense) {
+            return;
+        }
+
+        updateExpense({
+            id: draftedExpense?.id ?? '',
+            payload: {
+                place_name: confirmedLocation.placeName,
+                latitude: parseFloat(confirmedLocation.latitude?.toString() ?? '0'),
+                longitude: parseFloat(confirmedLocation.longitude?.toString() ?? '0'),
+            },
         });
-    }, [location]);
+    }, [confirmedLocation]);
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
             <Stack.Screen
                 options={{
-                    headerTitle: 'Expense Update',
+                    headerTitle: 'Expense',
                     headerRight: () => (
-                        <TouchableOpacity style={styles.locationButton} onPress={handleLocationPress}>
-                            <MaterialCommunityIcons name="store-marker" size={26} color="#333" />
-                            <View
-                                style={[
-                                    styles.locationIndicator,
-                                    { backgroundColor: expenseDraft.placeName ? '#34C759' : '#FF3B30' },
-                                ]}
-                            />
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <TouchableOpacity style={styles.locationButton} onPress={handleSelectCurrency}>
+                                <Text style={{ fontWeight: '700' }}>IDR</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.locationButton} onPress={handleLocationPress}>
+                                <MaterialCommunityIcons name="store-marker" size={26} color="#333" />
+                                <View
+                                    style={[
+                                        styles.locationIndicator,
+                                        { backgroundColor: draftedExpense?.place_name ? '#34C759' : '#FF3B30' },
+                                    ]}
+                                />
+                            </TouchableOpacity>
+                        </View>
                     ),
                 }}
             />
 
             <View style={{ flex: 1, justifyContent: 'space-between' }}>
-                <FlatList
-                    bounces={false}
-                    overScrollMode="never"
-                    data={expenseItems}
-                    keyboardShouldPersistTaps="handled"
-                    renderItem={({ item }) => (
-                        <ExpenseItem
-                            item={item}
-                            onRemove={(id) => handleRemoveItem(id)}
-                            onEdit={(id) => handleEditItem(id)}
-                        />
-                    )}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12, flexGrow: 1, backgroundColor: 'whitesmoke' }}
-                    ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyTitle}>No items yet</Text>
-                            <Text style={styles.emptyBody}>Tap the buttons below to scan/upload a receipt or add manually.</Text>
-                            
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <TouchableOpacity style={styles.emptyAddButton} onPress={handleManualAdd}>
-                                    <MaterialCommunityIcons name="basket-plus" size={20} color="#111" />
-                                    <Text style={styles.emptyAddButtonText}>Add Item</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.emptyAddButton, styles.emptyScanButton]} onPress={handleScanAdd}>
-                                    <MaterialCommunityIcons name="line-scan" size={20} color="#111" />
-                                    <Text style={styles.emptyAddButtonText}>Scan</Text>
-                                </TouchableOpacity>
-                            </View>
+                {isItemsLoading 
+                    ? (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'whitesmoke' }}>
+                            <ActivityIndicator size="large" />
                         </View>
-                    }
-                />
+                    ) 
+                    : (
+                    <FlatList
+                        bounces={false}
+                        overScrollMode="never"
+                        data={items}
+                        keyboardShouldPersistTaps="handled"
+                        renderItem={({ item }) => (
+                            <ExpenseItem
+                                item={item}
+                                onRemove={(item) => handleRemoveItem(item)}
+                                onEdit={(item) => handleEditItem(item)}
+                            />
+                        )}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12, flexGrow: 1, backgroundColor: 'whitesmoke' }}
+                        ListEmptyComponent={
+                            <View style={styles.emptyState}>
+                                <Text style={styles.emptyTitle}>No items yet</Text>
+                                <Text style={styles.emptyBody}>Tap the buttons below to scan/upload a receipt or add manually.</Text>
+                                
+                                <View style={{ flexDirection: 'row', gap: 12 }}>
+                                    <TouchableOpacity style={styles.emptyAddButton} onPress={handleManualAdd}>
+                                        <MaterialCommunityIcons name="basket-plus" size={20} color="#111" />
+                                        <Text style={styles.emptyAddButtonText}>Add Item</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={[styles.emptyAddButton, styles.emptyScanButton]} onPress={handleScanAdd}>
+                                        <MaterialCommunityIcons name="line-scan" size={20} color="#111" />
+                                        <Text style={styles.emptyAddButtonText}>Scan</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        }
+                    />
+                )}
             </View>
 
             {/* Bottom input */}
@@ -443,7 +488,7 @@ export default function SubmitExpense() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <MaterialCommunityIcons name="map-marker-radius" size={16} color="#555" />
                             <Text style={styles.locationText} numberOfLines={1}>
-                                {expenseDraft.placeName ? expenseDraft.placeName : 'Location not set'}
+                                {draftedExpense?.place_name ? draftedExpense.place_name : 'Location not set'}
                             </Text>
                         </View>
     
@@ -580,23 +625,29 @@ export default function SubmitExpense() {
                                     </View>
                                 </View>
                             ) : (
-                                <FlatList
-                                    data={categories}
-                                    keyExtractor={categoryKeyExtractor}
-                                    renderItem={({ item }) => renderCategoryItem({ item })}
-                                    extraData={selectedCategory}
-                                    numColumns={CATEGORY_COLUMNS}
-                                    scrollEnabled={false}
-                                    columnWrapperStyle={styles.categoryRow}
-                                    contentContainerStyle={styles.categoryListContent}
-                                    keyboardShouldPersistTaps="handled"
-                                />
+                                <View>
+                                    {isCategoriesLoading ? (
+                                        <ActivityIndicator size="small" />
+                                    ) : (
+                                        <FlatList
+                                            data={categories}
+                                            keyExtractor={categoryKeyExtractor}
+                                            renderItem={({ item }) => renderCategoryItem({ item })}
+                                            extraData={selectedCategory}
+                                            numColumns={CATEGORY_COLUMNS}
+                                            scrollEnabled={false}
+                                            columnWrapperStyle={styles.categoryRow}
+                                            contentContainerStyle={styles.categoryListContent}
+                                            keyboardShouldPersistTaps="handled"
+                                        />
+                                    )}
+                                </View>
                             )}
                         </ScrollView>
 
                         {!addCategoryVisible && (
                             <View style={[styles.modalFooterButtons]}>
-                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveOrUpdateItem(handleSaveItem)}>
+                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveOrUpdateItem(saveItemHandler)}>
                                     <Text style={styles.primaryButtonText}>Save Item</Text>
                                 </TouchableOpacity>
                             </View>

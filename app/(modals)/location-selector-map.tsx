@@ -1,9 +1,9 @@
 
 import MapMarker from '@/components/ui/mappin';
-import { getCurrentLocation, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
+import { getCurrentLocation, isLocationServiceEnabled, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,12 +12,13 @@ import { useDispatch } from 'react-redux';
 export default function LocationSelectorMap() {
   const dispatch = useDispatch();
   const router = useRouter();
-  const { returnTo, initialLat, initialLng, initialPlaceName, purpose } = useLocalSearchParams<{
+  const { returnTo, initialLat, initialLng, initialPlaceName, purpose, requestId } = useLocalSearchParams<{
     returnTo?: string;
     initialLat?: string;
     initialLng?: string;
     initialPlaceName?: string;
     purpose?: string;
+    requestId?: string;
   }>();
   const initialDelta = 0.0025;
   const [region, setRegion] = useState<Region | null>(null);
@@ -27,6 +28,7 @@ export default function LocationSelectorMap() {
   const [isReverseGeocodingLoading, setIsReverseGeocodingLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(true);
+  const [isLocationEnabled, setIsLocationEnabled] = useState(false);
   const pinScale = useRef(new Animated.Value(1)).current;
   const pinTranslate = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
@@ -45,132 +47,108 @@ export default function LocationSelectorMap() {
           ? `${purpose.charAt(0).toUpperCase()}${purpose.slice(1)}`
           : 'Location';
 
-  useEffect(() => {
-    const init = async () => {
-      setIsLoading(true);
+  const initializeLocationFlow = useCallback(async () => {
+    setIsLoading(true);
+    setPermissionError(null);
+    setIsRequestingPermission(true);
 
-      const parsedLat = initialLat ? Number(initialLat) : null;
-      const parsedLng = initialLng ? Number(initialLng) : null;
-      const saved: any = null; // for current iteration, we won't load the last selected location on init, but we may want to in the future for better UX
+    const locationEnabled = await isLocationServiceEnabled();
+    setIsLocationEnabled(locationEnabled);
 
-      if (parsedLat && parsedLng) {
-        const nextRegion: Region = {
-          latitude: parsedLat,
-          longitude: parsedLng,
-          latitudeDelta: initialDelta,
-          longitudeDelta: initialDelta,
-        };
-        setRegion(nextRegion);
-        lastRegionRef.current = nextRegion;
-        setCenterCoords({ latitude: parsedLat, longitude: parsedLng });
-        const placeName = initialPlaceName ?? '';
-        setPlaceName(placeName);
-
-        dispatch({ 
-          type: 'mapPicker/setLocation', 
-          payload: { 
-            requestId: 'expense-location', 
-            location: {
-              latitude: parsedLat,
-              longitude: parsedLng,
-              placeName: placeName,
-              purpose: purpose ?? '',
-            }
-          } 
-        });
-
-        setIsRequestingPermission(false);
-        setIsLoading(false);
-        hasInitialized.current = true;
-        return;
-      }
-
-      if (saved) {
-        const nextRegion: Region = {
-          latitude: saved.latitude,
-          longitude: saved.longitude,
-          latitudeDelta: initialDelta,
-          longitudeDelta: initialDelta,
-        };
-        setRegion(nextRegion);
-        lastRegionRef.current = nextRegion;
-        setCenterCoords({ latitude: saved.latitude, longitude: saved.longitude });
-        setPlaceName(saved.placeName ?? '');
-
-        dispatch({ 
-          type: 'mapPicker/setLocation', 
-          payload: { 
-            requestId: 'expense-location', 
-            location: {
-              latitude: parsedLat,
-              longitude: parsedLng,
-              placeName: placeName,
-              purpose: purpose ?? '',
-            }
-          } 
-        });
-
-        setIsRequestingPermission(false);
-        setIsLoading(false);
-        hasInitialized.current = true;
-        return;
-      }
-
-      setIsRequestingPermission(true);
-      const location = await getCurrentLocation();
-      if (location.ok) {
-        const nextRegion: Region = {
-          latitude: location.data.latitude,
-          longitude: location.data.longitude,
-          latitudeDelta: initialDelta,
-          longitudeDelta: initialDelta,
-        };
-        setRegion(nextRegion);
-        lastRegionRef.current = nextRegion;
-        setCenterCoords({ latitude: location.data.latitude, longitude: location.data.longitude });
-        const geocoded = await reverseGeocodeLocation(location.data.latitude, location.data.longitude);
-        const placeName = geocoded.ok ? geocoded.data.name : '';
-        setPlaceName(placeName);
-
-        dispatch({ 
-          type: 'mapPicker/setLocation', 
-          payload: { 
-            requestId: 'expense-location', 
-            location: {
-              placeName: placeName,
-            } 
-          } 
-        });
-
-        setIsRequestingPermission(false);
-      } else {
-        // Location permission denied or error occurred; surface notice and hide map content.
-        setPermissionError(location.error.message || 'Location permission is required.');
-        setIsRequestingPermission(false);
-      }
+    if (!locationEnabled) {
+      setPermissionError('Location services are disabled. Enable location services then press Refresh.');
+      setIsRequestingPermission(false);
       setIsLoading(false);
       hasInitialized.current = true;
-    };
-    init();
-  }, [initialPlaceName, initialDelta, initialLat, initialLng]);
+      return;
+    }
+
+    const parsedLat = initialLat ? Number(initialLat) : null;
+    const parsedLng = initialLng ? Number(initialLng) : null;
+    const saved: any = null; // for current iteration, we won't load the last selected location on init, but we may want to in the future for better UX
+
+    if (parsedLat && parsedLng) {
+      const nextRegion: Region = {
+        latitude: parsedLat,
+        longitude: parsedLng,
+        latitudeDelta: initialDelta,
+        longitudeDelta: initialDelta,
+      };
+      setRegion(nextRegion);
+      lastRegionRef.current = nextRegion;
+      setCenterCoords({ latitude: parsedLat, longitude: parsedLng });
+      const placeName = initialPlaceName ?? '';
+      setPlaceName(placeName);
+
+      setIsRequestingPermission(false);
+      setIsLoading(false);
+      hasInitialized.current = true;
+      return;
+    }
+
+    if (saved) {
+      const nextRegion: Region = {
+        latitude: saved.latitude,
+        longitude: saved.longitude,
+        latitudeDelta: initialDelta,
+        longitudeDelta: initialDelta,
+      };
+      setRegion(nextRegion);
+      lastRegionRef.current = nextRegion;
+      setCenterCoords({ latitude: saved.latitude, longitude: saved.longitude });
+      setPlaceName(saved.placeName ?? '');
+
+      setIsRequestingPermission(false);
+      setIsLoading(false);
+      hasInitialized.current = true;
+      return;
+    }
+
+    const location = await getCurrentLocation();
+    if (location.ok) {
+      const nextRegion: Region = {
+        latitude: location.data.latitude,
+        longitude: location.data.longitude,
+        latitudeDelta: initialDelta,
+        longitudeDelta: initialDelta,
+      };
+      setRegion(nextRegion);
+      lastRegionRef.current = nextRegion;
+      setCenterCoords({ latitude: location.data.latitude, longitude: location.data.longitude });
+      const geocoded = await reverseGeocodeLocation(location.data.latitude, location.data.longitude);
+      const placeName = geocoded.ok ? geocoded.data.name : '';
+      setPlaceName(placeName);
+
+      setIsRequestingPermission(false);
+    } else {
+      setPermissionError(location.error.message + '. Press button below to grant permission.' || 'Location permission is required.');
+      setIsRequestingPermission(false);
+    }
+    setIsLoading(false);
+    hasInitialized.current = true;
+  }, [initialLat, initialLng, initialPlaceName, initialDelta]);
+
+  useEffect(() => {
+    initializeLocationFlow();
+  }, [initializeLocationFlow]);
 
   const updateLocationFromCoords = async (latitude: number, longitude: number) => {
     const geocoded = await reverseGeocodeLocation(latitude, longitude);
     const placeName = geocoded.ok ? geocoded.data.name : '';
     setPlaceName(placeName);
 
-    dispatch({ 
-      type: 'mapPicker/setLocation', 
-      payload: { 
-        requestId: 'expense-location', 
-        location: {
-          latitude: latitude,
-          longitude: longitude,
-          placeName: placeName,
-          purpose: purpose ?? '',
-        }
-      } 
-    });
+    // dispatch({ 
+    //   type: 'mapPicker/setLocation', 
+    //   payload: { 
+    //     requestId: requestId, 
+    //     location: {
+    //       latitude: latitude,
+    //       longitude: longitude,
+    //       placeName: placeName,
+    //       purpose: purpose ?? '',
+    //     }
+    //   } 
+    // });
 
     setIsReverseGeocodingLoading(false);
   };
@@ -272,7 +250,7 @@ export default function LocationSelectorMap() {
     dispatch({ 
       type: 'mapPicker/setLocation', 
       payload: { 
-        requestId: 'expense-location', 
+        requestId: requestId, 
         location: payload 
       } 
     });
@@ -284,8 +262,12 @@ export default function LocationSelectorMap() {
     router.back();
   };
 
-  const handleOpenSettings = () => {
+  const handleOpenAppSettings = () => {
     openLocationSettings();
+  };
+
+  const handleRefresh = () => {
+    initializeLocationFlow();
   };
 
   const renderPermissionBlock = () => {
@@ -297,14 +279,19 @@ export default function LocationSelectorMap() {
           <MaterialCommunityIcons name="map-marker-off" size={40} color="#6b7280" />
         )}
         <Text style={styles.permissionTitle}>
-          {isRequestingPermission && !permissionError ? 'Requesting location permission…' : 'Location permission needed'}
+          {isRequestingPermission && !permissionError ? 'Requesting location permission…' : (isLocationEnabled ? 'Location permission needed' : 'Location services disabled')}
         </Text>
         <Text style={styles.permissionMessage}>
           {permissionError || 'Please enable location access in Settings to select a location.'}
         </Text>
         {!isRequestingPermission && permissionError ? (
-          <TouchableOpacity style={[styles.primaryButton, { flex: 0 }]} onPress={handleOpenSettings}>
-            <Text style={styles.primaryButtonText}>Open Settings</Text>
+          <TouchableOpacity
+            style={[styles.primaryButton, { flex: 0, paddingHorizontal: 30, borderRadius: 50 }]}
+            onPress={isLocationEnabled ? handleOpenAppSettings : handleRefresh}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isLocationEnabled ? 'Open Settings' : 'Refresh'}
+            </Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -315,6 +302,7 @@ export default function LocationSelectorMap() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <Stack.Screen options={{
         title: `Select ${purposeLabel}`,
+        headerTransparent: true,
         headerTitleStyle: {
           fontSize: 20,
           fontFamily: 'ZalandoSansExpanded_900Black',
@@ -329,7 +317,7 @@ export default function LocationSelectorMap() {
         }
       }} />
       
-      {isRequestingPermission || permissionError ? (
+      {isRequestingPermission || permissionError || !isLocationEnabled ? (
         renderPermissionBlock()
       ) : (
       <View style={styles.page}>
@@ -362,10 +350,10 @@ export default function LocationSelectorMap() {
               </View>
               <View style={styles.zoomControls}>
                 <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
-                  <MaterialCommunityIcons name="plus" size={18} />
+                  <MaterialCommunityIcons name="plus" size={26} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
-                  <MaterialCommunityIcons name="minus" size={18} />
+                  <MaterialCommunityIcons name="minus" size={26} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -417,7 +405,7 @@ const styles = StyleSheet.create({
   },
   page: {
     flex: 1,
-    gap: 16,
+    gap: 8,
   },
   mapCard: {
     overflow: 'hidden',
@@ -451,9 +439,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -498,6 +486,7 @@ const styles = StyleSheet.create({
   metaBlock: {
     gap: 4,
     paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   metaText: {
     fontSize: 13,
@@ -569,7 +558,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 36,
     paddingBottom: 100,
   },
   permissionTitle: {

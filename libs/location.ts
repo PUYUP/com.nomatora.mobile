@@ -174,3 +174,23 @@ export const reverseGeocodeLocation = async (
     return { ok: false, error: normalizeError(error) }
   }
 }
+
+export const isLocationServiceEnabled = async (): Promise<boolean> => {
+    try {
+        const servicesEnabled = await Location.hasServicesEnabledAsync()
+        if (!servicesEnabled) return false
+
+        return true
+    } catch {
+        return false
+    }
+}
+
+// Check and prompt the user to enable system location services if they are off.
+export const ensureLocationServicesEnabled = async (message = 'Please enable location services to continue.'): Promise<boolean> => {
+  const enabled = await isLocationServiceEnabled()
+  if (enabled) return true
+
+  openLocationSettingsWithToast(message)
+  return false
+}

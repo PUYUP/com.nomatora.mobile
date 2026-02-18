@@ -22,6 +22,20 @@
       "when": 1771335694820,
       "tag": "0002_sour_meltdown",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1771383777733,
+      "tag": "0003_left_the_hood",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1771431688415,
+      "tag": "0004_breezy_wonder_man",
+      "breakpoints": true
     }
   ]
 }

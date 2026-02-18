@@ -1,8 +1,7 @@
-import { ExpenseItemData } from "@/redux/expense/slice";
+import { ItemResponse, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useDispatch } from "react-redux";
 
 const FONTS = {
     regular: 'Inter_400Regular',
@@ -26,24 +25,24 @@ const SIZES = {
 };
 
 interface ExpenseItemProps {
-    item: ExpenseItemData;
-    onRemove?: (id: string) => void;
-    onEdit?: (id: string) => void;
+    item: ItemResponse | null;
+    onRemove?: (item: ItemResponse) => void;
+    onEdit?: (item: ItemResponse) => void;
 }
 
 export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps) {
     if (!item) return null;
     
     const { id, name, category, price } = item;
-    const dispatch = useDispatch();
     const [quantity, setQuantity] = useState(item.quantity ?? 1);
-    const displayPrice = parseFloat(price ?? '0');
+    const displayPrice = price;
     const totalPrice = displayPrice * quantity;
+    const [updateItem] = useUpdateItemMutation();
 
     const handleDecrease = (id: string) => {
         setQuantity((prev) => {
             const newQuantity = prev > 1 ? prev - 1 : prev;
-            dispatch({ type: 'expense/updateItem', payload: { ...item, quantity: newQuantity } });
+            updateItem({ id: id, payload: { quantity: newQuantity } });
             return newQuantity;
         });
     };
@@ -51,12 +50,12 @@ export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps
     const handleIncrease = (id: string) => {
         setQuantity((prev) => {
             const newQuantity = prev + 1;
-            dispatch({ type: 'expense/updateItem', payload: { ...item, quantity: newQuantity } });
+            updateItem({ id: id, payload: { quantity: newQuantity } });
             return newQuantity;
         });
     };
 
-    const handleRemove = (id: string) => {
+    const handleRemove = (item: ItemResponse) => {
         Alert.alert(
             "Remove Item",
             "Are you sure you want to remove this item?",
@@ -67,9 +66,7 @@ export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps
                 },
                 {
                     text: "Remove",
-                    onPress: () => {
-                        dispatch({ type: 'expense/removeItem', payload: id });
-                    },
+                    onPress: () => onRemove?.(item),
                     style: "destructive"
                 }
             ]
@@ -81,7 +78,7 @@ export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps
             <View style={styles.topRow}>
                 <View style={styles.detailsContainer}>
                     <Text style={styles.name}>{name}</Text>
-                    {category && <Text style={styles.category}>{category}</Text>}
+                    {category && <Text style={styles.category}>{item.category_name}</Text>}
                 </View>
 
                 <Text style={styles.price}>${totalPrice.toFixed(2)}</Text>
@@ -99,11 +96,11 @@ export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps
                 </View>
 
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity onPress={() => handleRemove(id)} style={styles.removeButton}>
+                    <TouchableOpacity onPress={() => handleRemove(item)} style={styles.removeButton}>
                         <Text style={styles.removeButtonText}>Remove</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => onEdit?.(id)} style={styles.editButton}>
+                    <TouchableOpacity onPress={() => onEdit?.(item)} style={styles.editButton}>
                         <MaterialCommunityIcons name="text-box-edit-outline" size={24} color="#666" />
                     </TouchableOpacity>
                 </View>

@@ -1,19 +1,20 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { expenseSlice } from './expense/slice';
-import { listenerMiddleware } from './listener';
 import { mapPickerSlice } from './map-picker-slice';
 
 // call the listeners so that they are registered
-import './expense/listeners';
+import { categoryApi } from './expense/category-api';
+import { expenseApi } from './expense/expense-api';
 
 export const store = configureStore({
     reducer: {
-        expense: expenseSlice.reducer,
         mapPicker: mapPickerSlice.reducer,
+        [expenseApi.reducerPath]: expenseApi.reducer,
+        [categoryApi.reducerPath]: categoryApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(
-            listenerMiddleware.middleware
+            expenseApi.middleware,
+            categoryApi.middleware,
         ),
 })
 

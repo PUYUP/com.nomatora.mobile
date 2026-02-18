@@ -1,6 +1,7 @@
+import { expenseItems } from "@/database/schema/expense-item";
 import { ensureMediaLibraryPermission, openSystemSettings } from "@/libs/image-picker";
 import { supabase } from "@/libs/supabase";
-import { ExpenseItemData } from "@/redux/expense/slice";
+import { useAddItemsMutation, useGetDraftedExpenseQuery } from "@/redux/expense/expense-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import TextRecognition, { TextBlock } from "@react-native-ml-kit/text-recognition";
 import { CameraView } from 'expo-camera';
@@ -9,17 +10,17 @@ import { Stack, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useDispatch } from "react-redux";
 
 const SCAN_LINE_HEIGHT = 2;
 const windowHeight = Dimensions.get('window').height;
 
 export default function ScanExpense() {
-    const dispatch = useDispatch();
     const cameraRef = useRef<CameraView | null>(null);
     const router = useRouter();
     const insets = useSafeAreaInsets();
-        
+    
+    const { data: draftedExpense } = useGetDraftedExpenseQuery();
+    const [addItems] = useAddItemsMutation();
     const [torchOn, setTorchOn] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -35,32 +36,40 @@ export default function ScanExpense() {
         setIsProcessing(true);
         try {
             const result = await TextRecognition.recognize(uri);
-            const data = await generateReceiptFromBlocks(result.blocks);
+            const receipt = await generateReceiptFromBlocks(result.blocks);
             let totalLoop = 0;
-            
-            // set to state for now, will use directly to prefill submit form later
-            if (data) {
-                for (let value of data.result.items) {
-                    const id = value.id ?? Date.now().toString();
-                    const trimmedName = value.name.trim();
-                    const payload: ExpenseItemData = {
-                        id: id,
-                        name: trimmedName,
-                        price: value.price,
-                        timestamp: Date.now(),
-                        category: 'Uncategorized',
-                        quantity: value.quantity,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
-                        expenseId: 'temp-expense-id',
-                    };
+            let items: Omit<typeof expenseItems.$inferSelect, 'id'>[] = [];
 
-                    dispatch({ type: 'expense/addItem', payload: payload });
+            // set to state for now, will use directly to prefill submit form later
+            if (receipt) {
+                for (let value of receipt.result.items) {
+                    const now = Date.now();
+                    const trimmedName = value.name.trim();
+                    const payload: Omit<typeof expenseItems.$inferSelect, 'id'> = {
+                        expense_id: draftedExpense?.id ?? 'temp-expense-id',
+                        name: trimmedName,
+                        price: parseFloat(value.price),
+                        category: '',
+                        quantity: value.quantity ? value.quantity : 1,
+                        created_at: now,
+                        updated_at: now,
+                        deleted_at: null,
+                        sync_status: 'pending',
+                        latitude: draftedExpense?.latitude ? parseFloat(draftedExpense.latitude.toString()) : 0,
+                        longitude: draftedExpense?.longitude ? parseFloat(draftedExpense.longitude.toString()) : 0,
+                        place_name: draftedExpense?.place_name ?? null,
+                    }
+
+                    items.push(payload);
                     totalLoop++;
                 }
 
+                if (items.length > 0) {
+                    await addItems({ items });
+                }
+
                 // back to submit page after processing, can consider to show confirmation dialog if needed
-                if (totalLoop === data.result.items.length) {
+                if (totalLoop === receipt.result.items.length) {
                     router.push('/expenses/submit');
                 }
             }
@@ -137,7 +146,7 @@ export default function ScanExpense() {
 
     /**
      * Block result from scanner need to refine with AI
-     * for now use gemini to extract correct value
+     * for now use GPT to extract correct value
      */
     const generateReceiptFromBlocks = async (blocks: TextBlock[]) => {
         const { data, error } = await supabase.functions.invoke("receipt-extractor-gpt4", {
@@ -145,7 +154,7 @@ export default function ScanExpense() {
         });
 
         if (error) {
-            console.warn("Gemini parsing failed", error);
+            console.warn("GPT parsing failed", error);
             return null;
         }
 
