@@ -7,7 +7,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -379,139 +379,141 @@ export default function LocationSelectorMap() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <Stack.Screen options={{
-        title: `Select ${purposeLabel}`,
-        headerTransparent: true,
-        headerTitleStyle: {
-          fontSize: 20,
-          fontFamily: 'ZalandoSansExpanded_900Black',
-          color: '#1F3D2B',
-        },
-        headerLeft: () => {
-          return (
-            <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} accessibilityLabel="Close">
-              <MaterialCommunityIcons name="keyboard-backspace" size={26} />
-            </TouchableOpacity>
-          )
-        }
-      }} />
-      
-      {isRequestingPermission || permissionError || !isLocationEnabled ? (
-        renderPermissionBlock()
-      ) : (
-      <View style={styles.page}>
-        <View style={{ height: 'auto', zIndex: 10 }}>
-          <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TextInput
-              placeholder="Search places..."
-              value={searchPlace}
-              onChangeText={placeSearchHandler}
-              style={styles.placeSearchInput}
-            />
-
-            {searchPlace.length > 0 && (
-              <TouchableOpacity onPress={() => clearSearchHandler()} style={styles.clearButton} accessibilityLabel="Clear search">
-                <MaterialCommunityIcons name="close" size={22} />
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <Stack.Screen options={{
+          title: `Select ${purposeLabel}`,
+          headerTransparent: true,
+          headerTitleStyle: {
+            fontSize: 20,
+            fontFamily: 'ZalandoSansExpanded_900Black',
+            color: '#1F3D2B',
+          },
+          headerLeft: () => {
+            return (
+              <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} accessibilityLabel="Close">
+                <MaterialCommunityIcons name="keyboard-backspace" size={26} />
               </TouchableOpacity>
-            )}
+            )
+          }
+        }} />
+        
+        {isRequestingPermission || permissionError || !isLocationEnabled ? (
+          renderPermissionBlock()
+        ) : (
+        <View style={styles.page}>
+          <View style={{ height: 'auto', zIndex: 10 }}>
+            <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TextInput
+                placeholder="Search places..."
+                value={searchPlace}
+                onChangeText={placeSearchHandler}
+                style={styles.placeSearchInput}
+              />
 
-            {isSearchingPlaces ? (
-              <ActivityIndicator size="small" style={styles.searchSpinner} />
-            ) : null}
+              {searchPlace.length > 0 && (
+                <TouchableOpacity onPress={() => clearSearchHandler()} style={styles.clearButton} accessibilityLabel="Clear search">
+                  <MaterialCommunityIcons name="close" size={22} />
+                </TouchableOpacity>
+              )}
+
+              {isSearchingPlaces ? (
+                <ActivityIndicator size="small" style={styles.searchSpinner} />
+              ) : null}
+            </View>
+
+            {placesResults.length > 0 && (
+              <View style={{ position: 'absolute', zIndex: 15, left: 16, right: 16, maxHeight: 300, width: 'auto', paddingVertical: 16, top: insets.top - 10, backgroundColor: '#fff', borderRadius: 10 }}>
+                <FlatList
+                  data={placesResults}
+                  keyExtractor={(item, index) => index.toString()}
+                  style={styles.placesList}
+                  renderItem={renderPlaceItem}
+                  keyboardShouldPersistTaps="handled"
+                />
+              </View>
+            )}
           </View>
 
-          {placesResults.length > 0 && (
-            <View style={{ position: 'absolute', zIndex: 15, left: 16, right: 16, maxHeight: 300, width: 'auto', paddingVertical: 16, top: insets.top - 10, backgroundColor: '#fff', borderRadius: 10 }}>
-              <FlatList
-                data={placesResults}
-                keyExtractor={(item, index) => index.toString()}
-                style={styles.placesList}
-                renderItem={renderPlaceItem}
-                keyboardShouldPersistTaps="handled"
-              />
-            </View>
-          )}
-        </View>
-
-        <View style={styles.mapCard}>
-          {isLoading || !region ? (
-            <View style={styles.mapLoading}>
-              <ActivityIndicator size="small" />
-              <Text style={styles.mutedText}>Loading map…</Text>
-            </View>
-          ) : (
-            <View style={styles.mapWrapper}>
-              <View style={styles.mapHint}>
-                <Text style={styles.hintText}>
-                  Drag the map to place the pin.
-                </Text>
+          <View style={styles.mapCard}>
+            {isLoading || !region ? (
+              <View style={styles.mapLoading}>
+                <ActivityIndicator size="small" />
+                <Text style={styles.mutedText}>Loading map…</Text>
               </View>
-              <MapView
-                ref={(ref) => { mapRef.current = ref; }}
-                style={styles.map}
-                initialRegion={region}
-                onLayout={(e) => setMapLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
-                onRegionChange={handleRegionChange}
-                onRegionChangeComplete={handleRegionChangeComplete}
-              />
-              <View style={styles.centerMarker} pointerEvents="none">
-                <Animated.View style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}>
-                  <View style={{ width: 40, height: 64 }}>
-                    <MapMarker width={40} height={64} />
+            ) : (
+              <View style={styles.mapWrapper}>
+                <View style={styles.mapHint}>
+                  <Text style={styles.hintText}>
+                    Drag the map to place the pin.
+                  </Text>
+                </View>
+                <MapView
+                  ref={(ref) => { mapRef.current = ref; }}
+                  style={styles.map}
+                  initialRegion={region}
+                  onLayout={(e) => setMapLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+                  onRegionChange={handleRegionChange}
+                  onRegionChangeComplete={handleRegionChangeComplete}
+                />
+                <View style={styles.centerMarker} pointerEvents="none">
+                  <Animated.View style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}>
+                    <View style={{ width: 40, height: 64 }}>
+                      <MapMarker width={40} height={64} />
+                    </View>
+                  </Animated.View>
+                  <View style={styles.centerGlow}>
+                    <AnimatedOval />
                   </View>
-                </Animated.View>
-                <View style={styles.centerGlow}>
-                  <AnimatedOval />
+                </View>
+                <View style={styles.zoomControls}>
+                  <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
+                    <MaterialCommunityIcons name="plus" size={26} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
+                    <MaterialCommunityIcons name="minus" size={26} />
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.zoomControls}>
-                <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
-                  <MaterialCommunityIcons name="plus" size={26} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
-                  <MaterialCommunityIcons name="minus" size={26} />
-                </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.metaBlock}>
+            <View style={[styles.metaRow, styles.metaRowPadded]}>
+              <MaterialCommunityIcons name="map-marker-radius-outline" size={26} color="#6b7280" />
+              <Text style={styles.metaText} numberOfLines={2}>{placeName ? placeName : '-'}</Text>
+            </View>
+
+            <View style={styles.metaRow}>
+              <MaterialCommunityIcons name="crosshairs-gps" size={26} color="#6b7280" />
+              <View style={styles.coordsRow}>
+                <Text style={styles.coordsText}>{centerCoords?.latitude}</Text>
+                <Text style={styles.coordsTextComma}>,</Text>
+                <Text style={styles.coordsText}>{centerCoords?.longitude}</Text>
               </View>
             </View>
-          )}
-        </View>
-
-        <View style={styles.metaBlock}>
-          <View style={[styles.metaRow, styles.metaRowPadded]}>
-            <MaterialCommunityIcons name="map-marker-radius-outline" size={26} color="#6b7280" />
-            <Text style={styles.metaText} numberOfLines={2}>{placeName ? placeName : '-'}</Text>
           </View>
 
-          <View style={styles.metaRow}>
-            <MaterialCommunityIcons name="crosshairs-gps" size={26} color="#6b7280" />
-            <View style={styles.coordsRow}>
-              <Text style={styles.coordsText}>{centerCoords?.latitude}</Text>
-              <Text style={styles.coordsTextComma}>,</Text>
-              <Text style={styles.coordsText}>{centerCoords?.longitude}</Text>
-            </View>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity style={[styles.secondaryButton, { width: '48%', marginRight: '2.5%' }]} onPress={() => router.back()}>
+              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.primaryButton, (!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled, { width: '48%', marginLeft: '2.5%', flex: 0 }]}
+              onPress={handleConfirm}
+              disabled={!centerCoords || isReverseGeocodingLoading}
+            >
+              {(!centerCoords || isReverseGeocodingLoading) ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Confirm</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.actionsRow}>
-          <TouchableOpacity style={[styles.secondaryButton, { width: '48%', marginRight: '2.5%' }]} onPress={() => router.back()}>
-            <Text style={styles.secondaryButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.primaryButton, (!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled, { width: '48%', marginLeft: '2.5%', flex: 0 }]}
-            onPress={handleConfirm}
-            disabled={!centerCoords || isReverseGeocodingLoading}
-          >
-            {(!centerCoords || isReverseGeocodingLoading) ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Confirm</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-      )}
-    </SafeAreaView>
+        )}
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 

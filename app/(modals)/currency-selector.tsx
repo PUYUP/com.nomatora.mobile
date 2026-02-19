@@ -59,9 +59,12 @@ export default function CurrencySelector() {
             AccessibilityInfo.announceForAccessibility(`${item.name} selected`);
             updateSetting({ key: 'default_currency', value: item.currency });
             updateSetting({ key: 'default_language', value: `${item.languageCode}-${item.code}` });
-            router.back();
+            
+            setTimeout(() => {
+                router.back();
+            }, 10);
         },
-        [updateSetting, router],
+        [updateSetting, router.back],
     );
 
     useEffect(() => {
