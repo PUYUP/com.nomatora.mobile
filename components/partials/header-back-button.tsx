@@ -13,7 +13,7 @@ export default function HeaderBackButton(props: NativeStackHeaderBackProps) {
     return (
         <TouchableOpacity onPress={() => navigation.goBack()}>
             <View style={styles.headerBackTileStyle}>
-                <MaterialCommunityIcons name="keyboard-backspace" size={26} />
+                <MaterialCommunityIcons name="chevron-left" size={30} style={{ marginRight: 1 }} />
             </View>
         </TouchableOpacity>
     );
@@ -21,9 +21,9 @@ export default function HeaderBackButton(props: NativeStackHeaderBackProps) {
 
 const styles = StyleSheet.create({
     headerBackTileStyle: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,

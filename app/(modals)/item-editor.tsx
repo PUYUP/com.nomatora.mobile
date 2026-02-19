@@ -47,12 +47,10 @@ export default function ItemEditorModal() {
     }, []);
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom']}>
             <Stack.Screen 
                 options={{ 
-                    headerShown: true,
                     headerTitle: 'Add Item',
-                    headerShadowVisible: false,
                 }} 
             />
             <View style={{ flex: 1, paddingBottom: 16 }}>

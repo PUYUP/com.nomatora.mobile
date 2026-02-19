@@ -14,6 +14,7 @@ import {
     FlatList,
     InteractionManager,
     Keyboard,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -144,7 +145,6 @@ export function ItemEditor({
 
     const [addCategoryVisible, setAddCategoryVisible] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
-
     const { handleSubmit, control, reset, setValue, getValues } = useForm<ItemEditorValues>({
         defaultValues: {
             id: undefined,
@@ -153,7 +153,7 @@ export function ItemEditor({
             category: "",
         },
     });
-
+    const itemValues = useWatch({ control: control, name: ['name', 'price', 'category'] });
     const selectedCategory = useWatch({ control, name: "category" }) || initialValues?.category || null;
 
     useEffect(() => {
@@ -263,6 +263,27 @@ export function ItemEditor({
         }
         shouldFocusNameRef.current = false;
     });
+
+    useEffect(() => {
+        const showSubscription = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
+                // do something
+            }
+        );
+        const hideSubscription = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+                const noValues = itemValues.every((value) => !value || value === '');
+                if (noValues) {
+                    onClose();
+                }
+            }
+        );
+
+        return () => {
+            showSubscription.remove();
+            hideSubscription.remove();
+        };
+    }, [itemValues]);
 
     if (!visible) return null;
 

@@ -384,7 +384,7 @@ export default function SubmitExpense() {
                 setIsKeyboardVisible(false);
 
                 const noValues = itemValues.every((value) => !value || value === '');
-                if (noValues && showEditor && !itemNameRef.current?.isFocused()) {
+                if (noValues && showEditor) {
                     handleCloseEditor();
                 }
             }
@@ -458,11 +458,11 @@ export default function SubmitExpense() {
                     headerRight: () => (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <TouchableOpacity style={styles.locationButton} onPress={handleSelectCurrency}>
-                                <Text style={{ fontWeight: '700' }}>{defaultCurrency ? defaultCurrency.value : 'N/A'}</Text>
+                                <Text style={{ fontWeight: '700', fontSize: 12 }}>{defaultCurrency ? defaultCurrency.value : 'N/A'}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.locationButton} onPress={handleLocationPress}>
-                                <MaterialCommunityIcons name="store-marker" size={26} color="#333" />
+                                <MaterialCommunityIcons name="store-marker" size={24} color="#333" />
                                 <View
                                     style={[
                                         styles.locationIndicator,
@@ -498,7 +498,7 @@ export default function SubmitExpense() {
                             />
                         )}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12, flexGrow: 1 }}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 16, flexGrow: 1 }}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <Text style={styles.emptyTitle}>No items yet</Text>
@@ -577,9 +577,9 @@ export default function SubmitExpense() {
                 onDismiss={() => setShowEditor(false)}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+                    <View style={{ flex: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom }}>
                         <View style={styles.editorHeader}>
-                            <Text style={styles.editorTitle}>{getItemFormValues('id') ? 'Edit Item' : 'Add Item'}</Text>
+                            <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
                             <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
                                 <MaterialCommunityIcons name="close" size={22} color="#111" />
                             </TouchableOpacity>
@@ -739,9 +739,9 @@ const styles = StyleSheet.create({
         color: '#111',
     },
     locationButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
@@ -750,12 +750,12 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     locationIndicator: {
-        width: 12,
-        height: 12,
+        width: 10,
+        height: 10,
         borderRadius: 6,
         position: 'absolute',
-        top: 8,
-        right: 8,
+        top: 6,
+        right: 6,
     },
     rowActions: {
         flexDirection: 'row',

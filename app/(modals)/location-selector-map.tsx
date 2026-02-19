@@ -379,58 +379,11 @@ export default function LocationSelectorMap() {
     );
   };
 
-  if (1 > 10) {
-    return (
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={true}>
-        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-          <Stack.Screen options={{
-            headerTitle: `Select ${purposeLabel}`,
-            headerTransparent: true,
-            headerTitleStyle: {
-              fontSize: 20,
-              fontFamily: 'ZalandoSansExpanded_900Black',
-              color: '#1F3D2B',
-            },
-            headerLeft: (props) => {
-              return <HeaderBackButton {...props} />
-            }
-          }} />
-
-          <View style={styles.page}>
-            <View style={{ height: 'auto', zIndex: 10 }}>
-              <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <TextInput
-                  placeholder="Search places..."
-                  value={searchPlace}
-                  onChangeText={placeSearchHandler}
-                  style={styles.placeSearchInput}
-                />
-
-                {searchPlace.length > 0 && (
-                  <TouchableOpacity onPress={() => clearSearchHandler()} style={styles.clearButton} accessibilityLabel="Clear search">
-                    <MaterialCommunityIcons name="close" size={22} />
-                  </TouchableOpacity>
-                )}
-
-                {isSearchingPlaces ? (
-                  <ActivityIndicator size="small" style={styles.searchSpinner} />
-                ) : null}
-              </View>
-
-              
-            </View>
-          </View>
-        </SafeAreaView>
-      </TouchableWithoutFeedback>
-    )
-  }
-
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={true}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <Stack.Screen options={{
           headerTitle: `Select ${purposeLabel}`,
-          headerTransparent: true,
           headerTitleStyle: {
             fontSize: 20,
             fontFamily: 'ZalandoSansExpanded_900Black',
@@ -446,7 +399,7 @@ export default function LocationSelectorMap() {
         ) : (
         <View style={styles.page}>
           <View style={{ height: 'auto', zIndex: 10 }}>
-            <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ position: 'relative', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TextInput
                 placeholder="Search places..."
                 value={searchPlace}
@@ -466,7 +419,7 @@ export default function LocationSelectorMap() {
             </View>
 
             {placesResults.length > 0 && (
-              <View style={{ position: 'absolute', zIndex: 15, left: 16, right: 16, maxHeight: 300, width: 'auto', paddingVertical: 16, top: insets.top - 10, backgroundColor: '#fff', borderRadius: 10 }}>
+              <View style={[styles.resultDialog, { top: 54 }]}>
                 <FlatList
                   data={placesResults}
                   keyExtractor={(item, index) => index.toString()}
@@ -567,7 +520,6 @@ const styles = StyleSheet.create({
   },
   page: {
     flex: 1,
-    gap: 8,
   },
   mapCard: {
     overflow: 'hidden',
@@ -601,7 +553,7 @@ const styles = StyleSheet.create({
   },
   zoomControls: {
     position: 'absolute',
-    right: 10,
+    right: 16,
     top: 10,
     gap: 6,
   },
@@ -627,7 +579,7 @@ const styles = StyleSheet.create({
   },
   mapHint: {
     position: 'absolute',
-    left: 10,
+    left: 16,
     top: 10,
     zIndex: 2,
     backgroundColor: '#fff',
@@ -656,7 +608,7 @@ const styles = StyleSheet.create({
   metaBlock: {
     gap: 4,
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingVertical: 12,
   },
   metaText: {
     fontSize: 13,
@@ -689,7 +641,6 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 0,
     marginTop: 'auto',
     paddingHorizontal: 16,
   },
@@ -743,11 +694,10 @@ const styles = StyleSheet.create({
   },
   placeSearchInput: {
     width: '100%',
-    height: 38,
+    height: 48,
     borderColor: '#e5e7eb',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
     fontSize: 15,
   },
@@ -757,15 +707,15 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     position: 'absolute',
-    right: 20,
-    top: 4,
+    right: 12,
+    top: 8,
     zIndex: 10,
     padding: 4,
   },
   searchSpinner: {
     position: 'absolute',
-    right: 50,
-    top: 8,
+    right: 48,
+    top: 12,
   },
   placeResultRow: {
     paddingHorizontal: 16,
@@ -784,4 +734,20 @@ const styles = StyleSheet.create({
   placeResultAddress: {
     color: '#4b5563',
   },
+  resultDialog: { 
+    position: 'absolute', 
+    zIndex: 15, 
+    left: 16, 
+    right: 16, 
+    maxHeight: 300, 
+    width: 'auto', 
+    paddingVertical: 12, 
+    backgroundColor: '#fff', 
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 6,
+  }
 });

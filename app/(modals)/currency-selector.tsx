@@ -89,16 +89,14 @@ export default function CurrencySelector() {
     ), [handleSelect, selectedCode]);
     
     return (
-        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={styles.container}>
+        <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+            <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <View style={styles.container}>
                         <View style={styles.searchBox}>
                             <TextInput
                                 ref={inputRef}
-                                style={[styles.searchInput]}
+                                style={styles.searchInput}
                                 value={query}
                                 onChangeText={handleChangeText}
                                 placeholder={'Search by country name...'}
@@ -128,7 +126,7 @@ export default function CurrencySelector() {
                             )}
                         </View>
                         <FlatList
-                            style={{ flex: 1, paddingHorizontal: 12 }}
+                            style={{ flex: 1, paddingTop: 8, paddingHorizontal: 0 }}
                             data={filtered}
                             keyExtractor={(item) => item.code}
                             renderItem={renderItem}
@@ -152,12 +150,15 @@ const styles = StyleSheet.create({
     },
     searchBox: {
         alignItems: 'center',
-        paddingHorizontal: 12,
         flexDirection: 'row',
         width: '100%',
+        borderBottomWidth: 1,
+        borderColor: 'gainsboro',
+        paddingRight: 16,
     },
     listItem: {
-        padding: 10,
+        padding: 16,
+        paddingVertical: 10,
         flexDirection: 'row',
         alignItems: 'center',
     },
@@ -168,12 +169,8 @@ const styles = StyleSheet.create({
         color: '#111827',
     },
     searchInput: {
-        height: 46,
-        borderColor: 'gainsboro',
-        borderWidth: 1,
-        borderRadius: 20,
+        height: 48,
         paddingHorizontal: 16,
-        margin: 10,
         flex: 1,
         backgroundColor: '#fff',
     },

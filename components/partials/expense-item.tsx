@@ -117,7 +117,7 @@ export default function ExpenseItem({ item, currencyCode, languageCode, onRemove
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => onEdit?.(item)} style={styles.editButton}>
-                        <MaterialCommunityIcons name="text-box-edit-outline" size={24} color="#666" />
+                        <MaterialCommunityIcons name="text-box-edit-outline" size={20} color="#666" />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -127,11 +127,16 @@ export default function ExpenseItem({ item, currencyCode, languageCode, onRemove
 
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: COLORS.surface,
+        backgroundColor: '#FCFCFC',
         borderRadius: SIZES.cardRadius,
         padding: SIZES.cardPadding,
         borderWidth: 1,
         borderColor: COLORS.border,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.075,
+        shadowRadius: 1,
+        elevation: 2,
     },
     topRow: {
         flexDirection: 'row',
@@ -201,7 +206,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         borderWidth: 1,
         borderColor: COLORS.border,
-        backgroundColor: COLORS.surface,
+        backgroundColor: 'ivory',
     },
     removeButton: {
         padding: 8,
