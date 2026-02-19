@@ -4,17 +4,20 @@ import { mapPickerSlice } from './map-picker-slice';
 // call the listeners so that they are registered
 import { categoryApi } from './expense/category-api';
 import { expenseApi } from './expense/expense-api';
+import { generalSettingsApi } from './general-settings-api';
 
 export const store = configureStore({
     reducer: {
         mapPicker: mapPickerSlice.reducer,
         [expenseApi.reducerPath]: expenseApi.reducer,
         [categoryApi.reducerPath]: categoryApi.reducer,
+        [generalSettingsApi.reducerPath]: generalSettingsApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(
             expenseApi.middleware,
             categoryApi.middleware,
+            generalSettingsApi.middleware,
         ),
 })
 

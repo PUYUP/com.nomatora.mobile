@@ -1,3 +1,4 @@
+import { UX_ZERO_DECIMAL } from "@/constants/settings";
 import { ItemResponse, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
@@ -26,17 +27,32 @@ const SIZES = {
 
 interface ExpenseItemProps {
     item: ItemResponse | null;
+    currencyCode?: string;
+    languageCode?: string;
     onRemove?: (item: ItemResponse) => void;
     onEdit?: (item: ItemResponse) => void;
 }
 
-export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps) {
+export default function ExpenseItem({ item, currencyCode, languageCode, onRemove, onEdit }: ExpenseItemProps) {
     if (!item) return null;
     
     const { id, name, category, price } = item;
     const [quantity, setQuantity] = useState(item.quantity ?? 1);
     const displayPrice = price;
     const totalPrice = displayPrice * quantity;
+
+    // currency formatter
+    const formatter = new Intl.NumberFormat(languageCode ?? 'en-US', {
+        style: "currency",
+        currency: currencyCode ?? 'USD',
+    });
+    const maximumFractionDigits = UX_ZERO_DECIMAL.includes(currencyCode ?? '') ? 0 : formatter.resolvedOptions().maximumFractionDigits;
+    const formattedPrice = new Intl.NumberFormat(languageCode || undefined, {
+        style: 'currency',
+        currency: currencyCode || 'USD',
+        minimumFractionDigits: maximumFractionDigits,
+        maximumFractionDigits: maximumFractionDigits
+    }).format(totalPrice);
     const [updateItem] = useUpdateItemMutation();
 
     const handleDecrease = (id: string) => {
@@ -81,7 +97,7 @@ export default function ExpenseItem({ item, onRemove, onEdit }: ExpenseItemProps
                     {category && <Text style={styles.category}>{item.category_name}</Text>}
                 </View>
 
-                <Text style={styles.price}>${totalPrice.toFixed(2)}</Text>
+                <Text style={styles.price}>{currencyCode ? `${formattedPrice}` : `$${formattedPrice}`}</Text>
             </View>
 
             <View style={styles.bottomRow}>

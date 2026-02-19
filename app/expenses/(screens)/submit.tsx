@@ -1,29 +1,23 @@
 import ExpenseItem from "@/components/partials/expense-item";
+import { UX_ZERO_DECIMAL } from "@/constants/settings";
 import { expenses as expensesSchema } from "@/database/schema/expense";
 import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
 import { itemCategories } from "@/database/schema/expense-item-category";
 import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
 import { useCreateMutation as createCategoryMudation, useGetAllQuery } from "@/redux/expense/category-api";
 import { ExpenseData, ExpenseItemData, useAddItemMutation, useCreateMutation, useDeleteItemMutation, useGetItemsQuery, useUpdateExpenseMutation, useUpdateItemMutation } from "@/redux/expense/expense-api";
+import { useGetByKeyQuery } from "@/redux/general-settings-api";
 import { AppDispatch, RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Stack, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { ActivityIndicator, Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import CurrencyInput from 'react-native-currency-input';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
-
-const CATEGORY_OPTIONS = [
-    'Groceries',
-    'Medical',
-    'Office',
-    'Electronics',
-    'Food',
-    'Transport',
-];
 
 const CATEGORY_COLUMNS = 2;
 const MAP_SELECTOR_ID = 'expense-location';
@@ -94,6 +88,12 @@ export default function SubmitExpense() {
     const { data: items, isLoading: isItemsLoading } = useGetItemsQuery(draftedExpense?.id!, {
         skip: !draftedExpense?.id,
     });
+
+    // currency and language settings
+    const { data: defaultCurrency } = useGetByKeyQuery('default_currency');
+    const { data: defaultLanguage } = useGetByKeyQuery('default_language');
+    const [maximumFD, setMaximumFD] = useState(2);
+    const [currencySymbol, setCurrencySymbol] = useState('$');
 
     // category
     const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
@@ -413,6 +413,45 @@ export default function SubmitExpense() {
         });
     }, [confirmedLocation]);
 
+    useEffect(() => {
+        if (!defaultCurrency?.value || !defaultLanguage?.value) return;
+
+        const locale = defaultLanguage.value;
+        const currency = defaultCurrency.value;
+
+        const formatter = new Intl.NumberFormat(locale, {
+            style: "currency",
+            currency,
+        });
+
+        // 1️⃣ Fraction Digits
+        const resolvedFD = formatter.resolvedOptions().maximumFractionDigits;
+
+        const maximumFractionDigits =
+            UX_ZERO_DECIMAL.includes(currency)
+            ? 0
+            : resolvedFD ?? 2;
+
+        setMaximumFD(maximumFractionDigits);
+
+        // 2️⃣ Currency Symbol
+        let symbol = currency; // safer fallback
+
+        try {
+            if (typeof formatter.formatToParts === "function") {
+                const parts = formatter.formatToParts(0);
+                symbol =  parts.find(p => p.type === "currency")?.value ?? symbol;
+            } else {
+                const formatted = formatter.format(0);
+                symbol = formatted.replace(/[\d\s.,-]/g, "") || symbol;
+            }
+        } catch {
+            symbol = currency;
+        }
+
+        setCurrencySymbol(symbol);
+    }, [defaultCurrency?.value, defaultLanguage?.value]);
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
             <Stack.Screen
@@ -421,7 +460,7 @@ export default function SubmitExpense() {
                     headerRight: () => (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <TouchableOpacity style={styles.locationButton} onPress={handleSelectCurrency}>
-                                <Text style={{ fontWeight: '700' }}>IDR</Text>
+                                <Text style={{ fontWeight: '700' }}>{defaultCurrency ? defaultCurrency.value : 'N/A'}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.locationButton} onPress={handleLocationPress}>
@@ -454,6 +493,8 @@ export default function SubmitExpense() {
                         renderItem={({ item }) => (
                             <ExpenseItem
                                 item={item}
+                                currencyCode={defaultCurrency?.value ?? 'USD'}
+                                languageCode={defaultLanguage?.value ?? 'en-US'}
                                 onRemove={(item) => handleRemoveItem(item)}
                                 onEdit={(item) => handleEditItem(item)}
                             />
@@ -574,18 +615,23 @@ export default function SubmitExpense() {
 
                             <Text style={styles.priceLabel}>Item Price</Text>
                             <View style={styles.priceRow}>
-                                <Text style={styles.pricePrefix}>$</Text>
+                                <Text style={styles.pricePrefix}>{currencySymbol}</Text>
                                 <Controller
                                     control={itemFormControl}
                                     rules={{ required: true }}
                                     render={({ field: { onChange, onBlur, value } }) => (
-                                        <TextInput
-                                            value={value}
-                                            onChangeText={onChange}
+                                        <CurrencyInput
+                                            value={parseFloat(value)}
+                                            onChangeValue={onChange}
                                             onBlur={onBlur}
-                                            placeholder="0.00"
                                             keyboardType="decimal-pad"
+                                            prefix={undefined}
+                                            delimiter="."
+                                            separator=","
+                                            precision={maximumFD}
+                                            minValue={0}
                                             style={styles.priceInput}
+                                            showPositiveSign={false}
                                         />
                                     )}
                                     name="price"

@@ -1,15 +1,19 @@
 
+import AnimatedOval from '@/components/ui/animated-oval';
 import MapMarker from '@/components/ui/mappin';
 import { getCurrentLocation, isLocationServiceEnabled, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
+import { supabase } from '@/libs/supabase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 
 export default function LocationSelectorMap() {
+  const insets = useSafeAreaInsets();
   const dispatch = useDispatch();
   const router = useRouter();
   const { returnTo, initialLat, initialLng, initialPlaceName, purpose, requestId } = useLocalSearchParams<{
@@ -29,6 +33,7 @@ export default function LocationSelectorMap() {
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(true);
   const [isLocationEnabled, setIsLocationEnabled] = useState(false);
+  const [mapLayout, setMapLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const pinScale = useRef(new Animated.Value(1)).current;
   const pinTranslate = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView | null>(null);
@@ -36,6 +41,9 @@ export default function LocationSelectorMap() {
   const isDraggingRef = useRef(false);
   const geoDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasInitialized = useRef(false);
+  const [searchPlace, setSearchPlace] = useState('');
+  const [placesResults, setPlacesResults] = useState<any[]>([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
 
   const purposeLabel = purpose === 'origin'
     ? 'Origin'
@@ -176,11 +184,21 @@ export default function LocationSelectorMap() {
       return;
     }
 
+    const pinAnchorOffsetPx = 8; // slight downward offset to align the pin tip with computed coordinate
     let center = { latitude: nextRegion.latitude, longitude: nextRegion.longitude };
     try {
-      const camera = await mapRef.current?.getCamera();
-      if (camera?.center) {
-        center = camera.center;
+      // Use screen-space center (plus a tiny offset) for more accurate anchor regardless of zoom level
+      if (mapRef.current && mapLayout.width && mapLayout.height) {
+        const point = {
+          x: mapLayout.width / 2,
+          y: mapLayout.height / 2 + pinAnchorOffsetPx,
+        };
+        center = await mapRef.current.coordinateForPoint(point);
+      } else {
+        const camera = await mapRef.current?.getCamera();
+        if (camera?.center) {
+          center = camera.center;
+        }
       }
     } catch (err) {
       // Fallback to nextRegion center
@@ -270,6 +288,68 @@ export default function LocationSelectorMap() {
     initializeLocationFlow();
   };
 
+  const selectPlaceHandler = (place: any) => {
+    if (place) {
+      const geometry = place.geometry;
+      const location = geometry.location;
+      setSearchPlace('');
+      setPlaceName(place.name);
+      setPlacesResults([]);
+      Keyboard.dismiss();
+
+      const nextRegion: Region = {
+        latitude: location.lat,
+        longitude: location.lng,
+        latitudeDelta: initialDelta,
+        longitudeDelta: initialDelta,
+      };
+      setRegion(nextRegion);
+      mapRef.current?.animateToRegion(nextRegion, 220);
+      lastRegionRef.current = nextRegion;
+      setCenterCoords({ latitude: location.lat, longitude: location.lng });
+    }
+  }
+
+  const placeSearchHandler = async (query: string) => {
+    setSearchPlace(query);
+    const latlng = `${centerCoords?.latitude ?? ''},${centerCoords?.longitude ?? ''}`;
+    handleSearch(query, latlng);
+    setIsSearchingPlaces(true);
+  }
+
+  const handleSearch = useCallback(
+    debounce(async (query: string, latlng: string) => {
+      const { data, error } = await supabase.functions.invoke("gmaps-places-search", {
+        body: { query: query, latlng: latlng },
+      });
+
+      if (error) {
+        console.warn("Places search failed", error);
+      }
+
+      setPlacesResults(data || []);
+      setIsSearchingPlaces(false);
+    }, 500), // 500ms delay
+    [] // Empty dependency array ensures the debounced function is created only once
+  );
+
+  const clearSearchHandler = () => {
+    setSearchPlace('');
+    setPlacesResults([]);
+  };
+
+  const renderPlaceItem = ({ item, index }: { item: any; index: number }) => {
+    const isLast = index === (placesResults?.length ?? 0) - 1;
+    return (
+      <TouchableOpacity onPress={() => selectPlaceHandler(item)}>
+        <View style={[styles.placeResultRow, isLast && styles.placeResultRowLast]}>
+          <Text style={styles.placeResultName}>{item.name}</Text>
+          <Text style={styles.placeResultAddress}>{item.formatted_address}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+
   const renderPermissionBlock = () => {
     return (
       <View style={styles.permissionBlock}>
@@ -308,10 +388,10 @@ export default function LocationSelectorMap() {
           fontFamily: 'ZalandoSansExpanded_900Black',
           color: '#1F3D2B',
         },
-        headerRight: () => {
+        headerLeft: () => {
           return (
             <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} accessibilityLabel="Close">
-              <MaterialCommunityIcons name="close" size={26} />
+              <MaterialCommunityIcons name="keyboard-backspace" size={26} />
             </TouchableOpacity>
           )
         }
@@ -321,6 +401,39 @@ export default function LocationSelectorMap() {
         renderPermissionBlock()
       ) : (
       <View style={styles.page}>
+        <View style={{ height: 'auto', zIndex: 10 }}>
+          <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TextInput
+              placeholder="Search places..."
+              value={searchPlace}
+              onChangeText={placeSearchHandler}
+              style={styles.placeSearchInput}
+            />
+
+            {searchPlace.length > 0 && (
+              <TouchableOpacity onPress={() => clearSearchHandler()} style={styles.clearButton} accessibilityLabel="Clear search">
+                <MaterialCommunityIcons name="close" size={22} />
+              </TouchableOpacity>
+            )}
+
+            {isSearchingPlaces ? (
+              <ActivityIndicator size="small" style={styles.searchSpinner} />
+            ) : null}
+          </View>
+
+          {placesResults.length > 0 && (
+            <View style={{ position: 'absolute', zIndex: 15, left: 16, right: 16, maxHeight: 300, width: 'auto', paddingVertical: 16, top: insets.top - 10, backgroundColor: '#fff', borderRadius: 10 }}>
+              <FlatList
+                data={placesResults}
+                keyExtractor={(item, index) => index.toString()}
+                style={styles.placesList}
+                renderItem={renderPlaceItem}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          )}
+        </View>
+
         <View style={styles.mapCard}>
           {isLoading || !region ? (
             <View style={styles.mapLoading}>
@@ -338,6 +451,7 @@ export default function LocationSelectorMap() {
                 ref={(ref) => { mapRef.current = ref; }}
                 style={styles.map}
                 initialRegion={region}
+                onLayout={(e) => setMapLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                 onRegionChange={handleRegionChange}
                 onRegionChangeComplete={handleRegionChangeComplete}
               />
@@ -347,6 +461,9 @@ export default function LocationSelectorMap() {
                     <MapMarker width={40} height={64} />
                   </View>
                 </Animated.View>
+                <View style={styles.centerGlow}>
+                  <AnimatedOval />
+                </View>
               </View>
               <View style={styles.zoomControls}>
                 <TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
@@ -377,11 +494,11 @@ export default function LocationSelectorMap() {
         </View>
 
         <View style={styles.actionsRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.back()}>
+          <TouchableOpacity style={[styles.secondaryButton, { width: '48%', marginRight: '2.5%' }]} onPress={() => router.back()}>
             <Text style={styles.secondaryButtonText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.primaryButton, (!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled]}
+            style={[styles.primaryButton, (!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled, { width: '48%', marginLeft: '2.5%', flex: 0 }]}
             onPress={handleConfirm}
             disabled={!centerCoords || isReverseGeocodingLoading}
           >
@@ -428,6 +545,14 @@ const styles = StyleSheet.create({
       { translateX: -20 },   // half of width (40/2)
       { translateY: -64 },   // full height (bukan -32)
     ],
+  },
+  centerGlow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 12,
+    alignItems: 'center',
+    height: 100,
   },
   zoomControls: {
     position: 'absolute',
@@ -519,7 +644,7 @@ const styles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 0,
     marginTop: 'auto',
     paddingHorizontal: 16,
   },
@@ -570,5 +695,48 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#4b5563',
     lineHeight: 20,
+  },
+  placeSearchInput: {
+    width: '100%',
+    height: 38,
+    borderColor: '#e5e7eb',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    fontSize: 15,
+  },
+  placesList: { 
+    height: 'auto', 
+    maxHeight: 300, 
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 20,
+    top: 4,
+    zIndex: 10,
+    padding: 4,
+  },
+  searchSpinner: {
+    position: 'absolute',
+    right: 50,
+    top: 8,
+  },
+  placeResultRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  placeResultRowLast: {
+    borderBottomWidth: 0,
+  },
+  placeResultName: {
+    fontWeight: '700',
+    marginBottom: 2,
+    color: '#111827',
+  },
+  placeResultAddress: {
+    color: '#4b5563',
   },
 });

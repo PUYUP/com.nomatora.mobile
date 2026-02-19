@@ -1,3 +1,4 @@
+import { useGetByKeyQuery, useUpsertMutation } from '@/redux/general-settings-api';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { countries } from 'countries-list';
 import { useRouter } from 'expo-router';
@@ -9,6 +10,7 @@ interface CountryItem {
   name: string;
   code: string;
   currency: string;
+  languageCode: string;
 }
 
 const maxResults = 100;
@@ -33,6 +35,8 @@ export default function CurrencySelector() {
     const [isFocused, setIsFocused] = useState<boolean>(false);
     const [selectedCode, setSelectedCode] = useState<string | null>(null);
     const inputRef = useRef<TextInput>(null);
+    const [updateSetting] = useUpsertMutation();
+    const { data: currentCurrencySetting } = useGetByKeyQuery('default_currency');
 
     const filtered = useMemo<CountryItem[]>(() => {
         const q = query.trim();
@@ -53,9 +57,11 @@ export default function CurrencySelector() {
         (item: CountryItem) => {
             setSelectedCode(item.code);
             AccessibilityInfo.announceForAccessibility(`${item.name} selected`);
+            updateSetting({ key: 'default_currency', value: item.currency });
+            updateSetting({ key: 'default_language', value: `${item.languageCode}-${item.code}` });
             router.back();
         },
-        [],
+        [updateSetting, router],
     );
 
     useEffect(() => {
@@ -64,6 +70,7 @@ export default function CurrencySelector() {
             code,
             name: data.name,
             currency: data.currency[0],
+            languageCode: data.languages[0],
         }));
 
         setCountryList(countriesData);
