@@ -25,7 +25,7 @@ import {
 } from "react-native";
 import CurrencyInput from "react-native-currency-input";
 
-const CATEGORY_COLUMNS = 2;
+const CATEGORY_COLUMNS = 3;
 
 export type ItemCategory = typeof itemCategories.$inferSelect;
 export type ItemRecord = typeof expenseItems.$inferSelect;
@@ -67,7 +67,7 @@ const CategoryChip = memo(function CategoryChip({
                     size={16}
                     color={selected ? "#2E7D32" : "#9AA0A6"}
                 />
-                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{item.name}</Text>
+                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]} numberOfLines={1}>{item.name}</Text>
             </View>
         </TouchableOpacity>
     );
@@ -148,7 +148,7 @@ export function ItemEditor({
         defaultValues: {
             id: undefined,
             name: "",
-            price: "",
+            price: "0",
             category: "",
         },
     });
@@ -159,7 +159,7 @@ export function ItemEditor({
         reset({
             id: initialValues?.id,
             name: initialValues?.name ?? "",
-            price: initialValues?.price ?? "",
+            price: initialValues?.price ?? "0",
             category: initialValues?.category ?? "",
         });
         shouldFocusNameRef.current = true;
@@ -320,7 +320,6 @@ export function ItemEditor({
                         name="name"
                     />
 
-                    <Text style={styles.priceLabel}>Item Price</Text>
                     <View style={styles.priceRow}>
                         <Text style={styles.pricePrefix}>{currencySymbol}</Text>
                         <Controller
@@ -328,7 +327,7 @@ export function ItemEditor({
                             rules={{ required: true }}
                             render={({ field: { onChange, onBlur, value } }) => (
                                 <CurrencyInput
-                                    value={typeof value === "number" ? value : parseFloat(value) || 0}
+                                    value={typeof value === "number" ? value : parseFloat(value)}
                                     onChangeValue={onChange}
                                     onBlur={onBlur}
                                     keyboardType="decimal-pad"
@@ -477,7 +476,7 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
     },
     categoryLabel: {
-        fontSize: 14,
+        fontSize: 16,
         color: "#555",
     },
     categoryHeader: {
@@ -509,8 +508,8 @@ const styles = StyleSheet.create({
     categoryChip: {
         flexDirection: "row",
         paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 12,
+        paddingHorizontal: 12,
+        borderRadius: 20,
         backgroundColor: "#F4F6FB",
         alignItems: "center",
         justifyContent: "center",
@@ -520,14 +519,14 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 6,
+        gap: 5,
     },
     categoryChipSelected: {
         backgroundColor: "#E4F5EB",
     },
     categoryChipText: {
         color: "#333",
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: "500",
         flex: 1,
     },

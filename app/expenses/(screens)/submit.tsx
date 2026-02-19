@@ -97,8 +97,6 @@ export default function SubmitExpense() {
     const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
     const [createCategory, { data: createdCategoryData }] = createCategoryMudation();
 
-    const [keyboardHeight, setKeyboardHeight] = useState(0);
-    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
     const [addCategoryVisible, setAddCategoryVisible] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
@@ -115,7 +113,13 @@ export default function SubmitExpense() {
         setValue: setItemFormValue,
         reset: resetItemForm,
         getValues: getItemFormValues,
-    } = useForm<ExpenseItemData>();
+    } = useForm<ExpenseItemData>({
+        defaultValues: {
+            name: "",
+            price: "0",
+            category: "",
+        }
+    });
 
     const {
         handleSubmit: handleSaveExpense,
@@ -125,9 +129,8 @@ export default function SubmitExpense() {
 
     const itemValues = useWatch({ control: itemFormControl, name: ['name', 'price', 'category'] });
     const selectedCategory = useWatch({ control: itemFormControl, name: 'category' }) || editedItem?.category || null;
-    const categories = useMemo(() => {
-        return fetchedCategories?.map((c) => c) ?? [];
-    }, [fetchedCategories]);
+    const categories = useMemo(() => fetchedCategories?.map((c) => c) ?? [], [fetchedCategories]);
+
     const renderCategoryItem = useCallback(({ item }: { item: typeof itemCategories.$inferSelect }) => {
         return (
             <CategoryChip
@@ -214,6 +217,12 @@ export default function SubmitExpense() {
      */
     const saveItemHandler = async (data: ExpenseItemData) => {  
         if (!draftedExpense) return;
+
+        // Guard when category is missing
+        if (!data.category || `${data.category}`.trim() === '') {
+            Alert.alert('Select category', 'Please choose a category before saving the item.');
+            return;
+        }
 
         const now = Date.now();
         const payload: Omit<typeof expenseItemsSchema.$inferSelect, 'id'> = {
@@ -375,15 +384,11 @@ export default function SubmitExpense() {
     useEffect(() => {
         const showSubscription = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
-                setKeyboardHeight(e.endCoordinates.height);
-                setIsKeyboardVisible(true);
+                // do something later
             }
         );
         const hideSubscription = Keyboard.addListener(
             Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
-                setKeyboardHeight(0);
-                setIsKeyboardVisible(false);
-
                 const noValues = itemValues.every((value) => !value || value === '');
                 if (noValues && showEditor) {
                     handleCloseEditor();
@@ -580,7 +585,7 @@ export default function SubmitExpense() {
                         <View style={styles.editorHeader}>
                             <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
                             <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
-                                <MaterialCommunityIcons name="close" size={22} color="#111" />
+                                <MaterialCommunityIcons name="close" size={20} color="#111" />
                             </TouchableOpacity>
                         </View>
                         <View style={styles.editorContent}>
@@ -610,7 +615,6 @@ export default function SubmitExpense() {
                                     name="name"
                                 />
 
-                                <Text style={styles.priceLabel}>Item Price</Text>
                                 <View style={styles.priceRow}>
                                     <Text style={styles.pricePrefix}>{currencySymbol}</Text>
                                     <Controller
@@ -868,9 +872,9 @@ const styles = StyleSheet.create({
         gap: 10,
     },
     modalCloseButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 38,
+        height: 38,
+        borderRadius: 19,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: '#F2F2F2',
@@ -927,7 +931,7 @@ const styles = StyleSheet.create({
         paddingVertical: 0,
     },
     categoryLabel: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#555',
     },
     categoryHeader: {
