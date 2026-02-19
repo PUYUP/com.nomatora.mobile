@@ -47,9 +47,9 @@ export default function ExpenseItem({ item, currencyCode, languageCode, onRemove
         currency: currencyCode ?? 'USD',
     });
     const maximumFractionDigits = UX_ZERO_DECIMAL.includes(currencyCode ?? '') ? 0 : formatter.resolvedOptions().maximumFractionDigits;
-    const formattedPrice = new Intl.NumberFormat(languageCode || undefined, {
+    const formattedPrice = new Intl.NumberFormat(languageCode ?? 'en-US', {
         style: 'currency',
-        currency: currencyCode || 'USD',
+        currency: currencyCode ?? 'USD',
         minimumFractionDigits: maximumFractionDigits,
         maximumFractionDigits: maximumFractionDigits
     }).format(totalPrice);

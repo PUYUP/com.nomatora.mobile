@@ -100,10 +100,9 @@ export function ItemEditor({
      * Get currency symbol from settings and pass to ItemEditor for price formatting. This is a temporary solution until we implement a proper global state management for settings.
      */
     useEffect(() => {
-        if (!defaultCurrency?.value || !defaultLanguage?.value) return;
-
-        const locale = defaultLanguage.value;
-        const currency = defaultCurrency.value;
+        // Fallback to USD / en-US when settings are unavailable
+        const locale = defaultLanguage?.value ?? 'en-US';
+        const currency = defaultCurrency?.value ?? 'USD';
 
         const formatter = new Intl.NumberFormat(locale, {
             style: "currency",

@@ -197,10 +197,17 @@ export default function ScanExpense() {
     }, [capturedUri, isProcessing, scanAnim]);
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['left', 'right']}>
             <Stack.Screen
                 options={{
-                    headerTitle: 'Receipt Scanner',
+                    headerTitle: 'Scan your receipt',
+                    headerTransparent: true,
+                    headerTintColor: '#FFF',
+                    headerRight: () => (
+                        <View style={{ backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 12, height: 38, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }}>
+                            <Text style={{ color: '#FFF', fontSize: 13 }}>Align the receipt inside the camera and capture</Text>
+                        </View>
+                    ),
                 }}
             />
             
@@ -238,7 +245,7 @@ export default function ScanExpense() {
                 )}
 
                 {!capturedUri && (
-                    <View style={styles.controlsBar}>
+                    <View style={[styles.controlsBar, { paddingBottom: insets.bottom }]}>
                         <View style={{ width: 120 }}> 
                             <TouchableOpacity style={styles.controlButton} onPress={handleToggleFlash}>
                                 <MaterialCommunityIcons name={torchOn ? "flashlight" : "flashlight-off"} size={22} color="#111" />

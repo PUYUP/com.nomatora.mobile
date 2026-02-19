@@ -412,10 +412,9 @@ export default function SubmitExpense() {
     }, [confirmedLocation]);
 
     useEffect(() => {
-        if (!defaultCurrency?.value || !defaultLanguage?.value) return;
-
-        const locale = defaultLanguage.value;
-        const currency = defaultCurrency.value;
+        // Fallback to USD / en-US when settings are unavailable
+        const locale = defaultLanguage?.value ?? 'en-US';
+        const currency = defaultCurrency?.value ?? 'USD';
 
         const formatter = new Intl.NumberFormat(locale, {
             style: "currency",
@@ -458,7 +457,7 @@ export default function SubmitExpense() {
                     headerRight: () => (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <TouchableOpacity style={styles.locationButton} onPress={handleSelectCurrency}>
-                                <Text style={{ fontWeight: '700', fontSize: 12 }}>{defaultCurrency ? defaultCurrency.value : 'N/A'}</Text>
+                                <Text style={{ fontWeight: '700', fontSize: 12 }}>{defaultCurrency ? defaultCurrency.value : 'USD'}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.locationButton} onPress={handleLocationPress}>
