@@ -90,7 +90,7 @@ export function ItemEditor({
 
     // category
     const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
-    const [createCategory] = createCategoryMudation();
+    const [createCategory, { data: createdCategoryData }] = createCategoryMudation();
     const categories = useMemo(() => fetchedCategories?.map((c) => c) ?? [], [fetchedCategories]);
 
     // item
@@ -195,8 +195,18 @@ export function ItemEditor({
         }, 120);
     }, [addCategoryVisible]);
 
-    const categoryKeyExtractor = useCallback((item: ItemCategory) => item.id, []);
+    useEffect(() => {
+        /**
+         * Only auto-select category when:
+         * - Not editing existing item
+         * - AND there is no selected category yet
+         */
+        if (!selectedCategory && createdCategoryData) {
+            setValue('category', createdCategoryData?.id ?? '');
+        }
+    }, [createdCategoryData]);
 
+    const categoryKeyExtractor = useCallback((item: ItemCategory) => item.id, []);
     const renderCategoryItem = useCallback(({ item }: { item: ItemCategory }) => {
         return (
             <CategoryChip
@@ -217,7 +227,7 @@ export function ItemEditor({
         setAddCategoryVisible(false);
     };
 
-    const handleSubmitCategory = async () => {
+    const saveCategoryHandler = async () => {
         const trimmed = newCategoryName.trim();
         if (!trimmed) return;
 
@@ -227,11 +237,6 @@ export function ItemEditor({
         }
 
         createCategory({ name: trimmed });
-
-        if (!initialValues?.id && !selectedCategory) {
-            setValue("category", trimmed);
-        }
-
         setNewCategoryName("");
         setAddCategoryVisible(false);
     };
@@ -368,7 +373,7 @@ export function ItemEditor({
                                 <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
                                     <Text style={styles.secondaryButtonText}>Cancel</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={handleSubmitCategory}>
+                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveCategoryHandler}>
                                     <Text style={styles.primaryButtonText}>Save</Text>
                                 </TouchableOpacity>
                             </View>

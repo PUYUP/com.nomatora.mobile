@@ -95,7 +95,7 @@ export default function SubmitExpense() {
 
     // category
     const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
-    const [createCategory] = createCategoryMudation();
+    const [createCategory, { data: createdCategoryData }] = createCategoryMudation();
 
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
@@ -282,7 +282,7 @@ export default function SubmitExpense() {
         setAddCategoryVisible(true);
     };
 
-    const handleSubmitCategory = () => {
+    const saveCategoryHandler = () => {
         const trimmed = newCategoryName.trim();
         if (!trimmed) return;
 
@@ -292,16 +292,6 @@ export default function SubmitExpense() {
         }
 
         createCategory({ name: trimmed });
-        
-        /**
-         * Only auto-select category when:
-         * - Not editing existing item
-         * - AND there is no selected category yet
-         */
-        if (!editedItem && !selectedCategory) {
-            setItemFormValue('category', trimmed);
-        }
-
         setNewCategoryName('');
         setAddCategoryVisible(false);
     };
@@ -340,6 +330,17 @@ export default function SubmitExpense() {
             if (updatedExpenseData) setDraftedExpense(updatedExpenseData);
         }
     }, [createdExpenseData, updatedExpenseData]);
+
+    useEffect(() => {
+        /**
+         * Only auto-select category when:
+         * - Not editing existing item
+         * - AND there is no selected category yet
+         */
+        if (!editedItem && !selectedCategory && createdCategoryData) {
+            setItemFormValue('category', createdCategoryData?.id ?? '');
+        }
+    }, [createdCategoryData]);
 
     useEffect(() => {
         if (items && items.length > 0) {
@@ -663,7 +664,7 @@ export default function SubmitExpense() {
                                             <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
                                                 <Text style={styles.secondaryButtonText}>Cancel</Text>
                                             </TouchableOpacity>
-                                            <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={handleSubmitCategory}>
+                                            <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveCategoryHandler}>
                                                 <Text style={styles.primaryButtonText}>Save</Text>
                                             </TouchableOpacity>
                                         </View>
