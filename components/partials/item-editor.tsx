@@ -2,7 +2,7 @@ import { UX_ZERO_DECIMAL } from "@/constants/settings";
 import { expenseItems } from "@/database/schema/expense-item";
 import { itemCategories } from "@/database/schema/expense-item-category";
 import { useCreateMutation as createCategoryMudation, useGetAllQuery } from "@/redux/expense/category-api";
-import { useAddItemMutation } from "@/redux/expense/expense-api";
+import { useAddItemMutation, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import { useGetByKeyQuery } from "@/redux/general-settings-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -95,6 +95,7 @@ export function ItemEditor({
 
     // item
     const [addItem] = useAddItemMutation();
+    const [updateItem] = useUpdateItemMutation();
 
     /**
      * Get currency symbol from settings and pass to ItemEditor for price formatting. This is a temporary solution until we implement a proper global state management for settings.
@@ -152,7 +153,7 @@ export function ItemEditor({
             category: "",
         },
     });
-    const itemValues = useWatch({ control: control, name: ['name', 'price', 'category'] });
+    const itemValues = useWatch({ control: control, name: ['name', 'category'] });
     const selectedCategory = useWatch({ control, name: "category" }) || initialValues?.category || null;
 
     useEffect(() => {
@@ -162,7 +163,12 @@ export function ItemEditor({
             price: initialValues?.price ?? "0",
             category: initialValues?.category ?? "",
         });
-        shouldFocusNameRef.current = true;
+
+        if (initialValues?.id) {
+            shouldFocusNameRef.current = false; // when editing existing item, do not auto-focus name input to avoid disrupting user's flow, especially when they just want to change price or category. User can still manually focus the name input if they want to edit the name.
+        } else {
+            shouldFocusNameRef.current = true;
+        }
     }, [initialValues, reset]);
 
     const focusNameInput = useCallback(() => {
@@ -185,7 +191,7 @@ export function ItemEditor({
             return true;
         });
         return () => sub.remove();
-    }, [visible, focusNameInput, onClose]);
+    }, [visible, focusNameInput]);
 
     useEffect(() => {
         if (!addCategoryVisible) return;
@@ -261,7 +267,27 @@ export function ItemEditor({
             place_name: null,
         }
 
-        const result = await addItem(payload);
+        let result: any = null;
+
+        if (initialValues?.id) {
+            // update item
+            result = await updateItem({ 
+                id: initialValues.id, 
+                payload: {
+                    name: payload.name,
+                    price: payload.price,
+                    category: payload.category,
+                    latitude: null,
+                    longitude: null,
+                    place_name: null,
+                    updated_at: now,
+                } 
+            });
+        } else {
+            // create new item
+            result = await addItem(payload);
+        }
+        
         if (result && result.data) {
             onSaved?.(result.data as ItemRecord);
         }
@@ -437,6 +463,7 @@ const styles = StyleSheet.create({
     },
     modalScroll: {
         padding: 16,
+        paddingTop: 12,
     },
     modalScrollContent: {
         flexGrow: 1,
@@ -444,12 +471,12 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
     },
     itemNameInput: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: "600",
         color: "#111",
-        minHeight: 40,
+        minHeight: 30,
         textAlignVertical: "top",
-        paddingRight: 52,
+        paddingRight: 0,
         paddingLeft: 0,
     },
     priceLabel: {
@@ -470,7 +497,7 @@ const styles = StyleSheet.create({
     },
     priceInput: {
         flex: 1,
-        fontSize: 32,
+        fontSize: 28,
         fontWeight: "700",
         color: "#111",
         paddingVertical: 0,
@@ -500,10 +527,10 @@ const styles = StyleSheet.create({
         fontWeight: "600",
     },
     categoryListContent: {
-        gap: 10,
+        gap: 8,
     },
     categoryRow: {
-        gap: 10,
+        gap: 6,
     },
     categoryChip: {
         flexDirection: "row",

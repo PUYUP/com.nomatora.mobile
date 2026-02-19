@@ -1,52 +1,22 @@
 import ExpenseItem from "@/components/partials/expense-item";
-import { UX_ZERO_DECIMAL } from "@/constants/settings";
+import ItemEditor from "@/components/partials/item-editor";
 import { expenses as expensesSchema } from "@/database/schema/expense";
 import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
-import { itemCategories } from "@/database/schema/expense-item-category";
 import { ensureCameraPermission, openCameraSettings } from "@/libs/camera";
-import { useCreateMutation as createCategoryMudation, useGetAllQuery } from "@/redux/expense/category-api";
-import { ExpenseData, ExpenseItemData, useAddItemMutation, useCreateMutation, useDeleteItemMutation, useGetItemsQuery, useUpdateExpenseMutation, useUpdateItemMutation } from "@/redux/expense/expense-api";
+import { ExpenseData, useCreateMutation, useDeleteItemMutation, useGetItemsQuery, useUpdateExpenseMutation } from "@/redux/expense/expense-api";
 import { useGetByKeyQuery } from "@/redux/general-settings-api";
 import { AppDispatch, RootState } from "@/redux/store";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Stack, useRouter } from "expo-router";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
-import { ActivityIndicator, Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
-import CurrencyInput from 'react-native-currency-input';
+import { useEffect, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { ActivityIndicator, Alert, FlatList, Keyboard, Modal, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 
-const CATEGORY_COLUMNS = 2;
 const MAP_SELECTOR_ID = 'expense-location';
-
-const CategoryChip = memo(function CategoryChip({
-    item,
-    selected,
-    onSelect,
-}: {
-    item: typeof itemCategories.$inferSelect;
-    selected: boolean;
-    onSelect: (item: typeof itemCategories.$inferSelect) => void;
-}) {
-    return (
-        <TouchableOpacity
-            style={[styles.categoryChip, selected && styles.categoryChipSelected]}
-            onPress={() => onSelect(item)}
-        >
-            <View style={styles.categoryChipContent}>
-                <MaterialCommunityIcons
-                    name={selected ? 'check-circle' : 'checkbox-blank-circle-outline'}
-                    size={16}
-                    color={selected ? '#2E7D32' : '#9AA0A6'}
-                />
-                <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{item.name}</Text>
-            </View>
-        </TouchableOpacity>
-    );
-});
 
 const useGradualAnimation = (insets: ReturnType<typeof useSafeAreaInsets>) => {
     const height = useSharedValue(0);
@@ -55,7 +25,7 @@ const useGradualAnimation = (insets: ReturnType<typeof useSafeAreaInsets>) => {
         {
             onMove: event => {
                 'worklet';
-                height.value = withTiming(Math.max(event.height, 0), { duration: 0 });
+                height.value = withTiming(Math.max(event.height, insets.bottom), { duration: 0 });
             },
         },
         []
@@ -78,8 +48,6 @@ export default function SubmitExpense() {
     
     const [createExpense, { data: createdExpenseData }] = useCreateMutation();
     const [updateExpense, { data: updatedExpenseData }] = useUpdateExpenseMutation();
-    const [addItem] = useAddItemMutation();
-    const [updateItem] = useUpdateItemMutation();
     const [deleteItem] = useDeleteItemMutation(); 
     const [draftedExpense, setDraftedExpense] = useState<typeof expensesSchema.$inferSelect | null>(null);
     const [draftedItems, setDraftedItems] = useState<typeof expenseItemsSchema.$inferSelect[]>([]);
@@ -90,71 +58,15 @@ export default function SubmitExpense() {
     // currency and language settings
     const { data: defaultCurrency } = useGetByKeyQuery('default_currency');
     const { data: defaultLanguage } = useGetByKeyQuery('default_language');
-    const [maximumFD, setMaximumFD] = useState(2);
-    const [currencySymbol, setCurrencySymbol] = useState('$');
-
-    // category
-    const { data: fetchedCategories, isLoading: isCategoriesLoading } = useGetAllQuery();
-    const [createCategory, { data: createdCategoryData }] = createCategoryMudation();
 
     const [showEditor, setShowEditor] = useState(false);
-    const [addCategoryVisible, setAddCategoryVisible] = useState(false);
-    const [newCategoryName, setNewCategoryName] = useState('');
     const [editedItem, setEditedItem] = useState<typeof expenseItemsSchema.$inferSelect | null>(null);
-    const itemNameRef = useRef<TextInput | null>(null);
-    const editorScrollRef = useRef<ScrollView | null>(null);
-    const shouldFocusNameRef = useRef(false);
-    const inlineCategoryY = useRef(0);
-
-    // item form
-    const {
-        handleSubmit: saveOrUpdateItem,
-        control: itemFormControl,
-        setValue: setItemFormValue,
-        reset: resetItemForm,
-        getValues: getItemFormValues,
-    } = useForm<ExpenseItemData>({
-        defaultValues: {
-            name: "",
-            price: "0",
-            category: "",
-        }
-    });
 
     const {
         handleSubmit: handleSaveExpense,
         control: expenseFormControl,
         reset: resetExpenseForm,
     } = useForm<ExpenseData>();
-
-    const itemValues = useWatch({ control: itemFormControl, name: ['name', 'price', 'category'] });
-    const selectedCategory = useWatch({ control: itemFormControl, name: 'category' }) || editedItem?.category || null;
-    const categories = useMemo(() => fetchedCategories?.map((c) => c) ?? [], [fetchedCategories]);
-
-    const renderCategoryItem = useCallback(({ item }: { item: typeof itemCategories.$inferSelect }) => {
-        return (
-            <CategoryChip
-                item={item}
-                selected={selectedCategory ? (selectedCategory === item.id || selectedCategory === item.name) : false}
-                onSelect={(item) => setItemFormValue('category', item.id)}
-            />
-        );
-    }, [selectedCategory, setItemFormValue]);
-
-    const categoryKeyExtractor = useCallback((item: typeof itemCategories.$inferSelect) => item.id , []);
-    const focusNameInput = useCallback(() => {
-        if (!shouldFocusNameRef.current) return;
-        if (editedItem) return; // do not focus if it's editing an existing item
-
-        InteractionManager.runAfterInteractions(() => {
-            setTimeout(() => {
-                if (!shouldFocusNameRef.current) return;
-                const node = itemNameRef.current;
-                if (!node) return;
-                node.focus?.();
-            }, 60);
-        });
-    }, [editedItem]);
 
     // get location based on their id
     // in this case the id is 'expense-location'
@@ -187,10 +99,7 @@ export default function SubmitExpense() {
     }
 
     const handleManualAdd = () => {
-        resetItemForm();
         setEditedItem(null);
-        setAddCategoryVisible(false);
-        shouldFocusNameRef.current = true; // only focus for new item
         setShowEditor(true);
     };
 
@@ -210,57 +119,12 @@ export default function SubmitExpense() {
         router.push('/expenses/(screens)/scan');
     };
 
-    /**
-     * Saves a new item or updates an existing one based on the presence of an ID in the data.
-     * 
-     * @param data ExpenseItemData
-     */
-    const saveItemHandler = async (data: ExpenseItemData) => {  
-        if (!draftedExpense) return;
-
-        // Guard when category is missing
-        if (!data.category || `${data.category}`.trim() === '') {
-            Alert.alert('Select category', 'Please choose a category before saving the item.');
-            return;
-        }
-
-        const now = Date.now();
-        const payload: Omit<typeof expenseItemsSchema.$inferSelect, 'id'> = {
-            expense_id: draftedExpense.id!,
-            name: data.name.trim(),
-            price: parseFloat(data.price),
-            category: data.category || '',
-            quantity: data.quantity ? data.quantity : 1,
-            created_at: now,
-            updated_at: now,
-            deleted_at: null,
-            sync_status: 'pending',
-            latitude: draftedExpense.latitude ?? null,
-            longitude: draftedExpense.longitude ?? null,
-            place_name: draftedExpense.place_name ?? null,
-        }
-        
-        if (editedItem) {
-            updateItem({ 
-                id: editedItem.id, 
-                payload: {
-                    name: data.name.trim(),
-                    price: parseFloat(data.price),
-                    category: data.category || '',
-                    latitude: draftedExpense.latitude ?? null,
-                    longitude: draftedExpense.longitude ?? null,
-                    place_name: draftedExpense.place_name ?? null,
-                    updated_at: now,
-                } 
-            });
-        } else {
-            addItem(payload);
-        }
-
-        resetItemForm();
+    const itemEditorOnSavedHandler = (item: typeof expenseItemsSchema.$inferSelect) => {
         setShowEditor(false);
-        shouldFocusNameRef.current = false;
-        setEditedItem(null);
+    }
+
+    const itemEditorOnCloseHandler = () => {
+        handleCloseEditor();
     }
 
     const saveExpenseHandler = (data: ExpenseData) => {
@@ -281,45 +145,12 @@ export default function SubmitExpense() {
     }
 
     const handleCloseEditor = () => {
-        setAddCategoryVisible(false);
         setShowEditor(false);
         resetExpenseForm();
     };
 
-    const handleAddCategory = () => {
-        setNewCategoryName('');
-        setAddCategoryVisible(true);
-    };
-
-    const saveCategoryHandler = () => {
-        const trimmed = newCategoryName.trim();
-        if (!trimmed) return;
-
-        if (categories && categories.length >= 10) {
-            Alert.alert('Category limit reached', 'You can only keep up to 10 categories.');
-            return;
-        }
-
-        createCategory({ name: trimmed });
-        setNewCategoryName('');
-        setAddCategoryVisible(false);
-    };
-
-    const handleCancelCategory = () => {
-        setNewCategoryName('');
-        setAddCategoryVisible(false);
-    };
-
     const handleEditItem = (item: typeof expenseItemsSchema.$inferSelect) => {
         setEditedItem(item);
-
-        // set values to form
-        setItemFormValue('name', item.name);
-        setItemFormValue('price', item.price.toString());
-        setItemFormValue('category', item.category || '');
-
-        setAddCategoryVisible(false);
-        shouldFocusNameRef.current = false; // do not autofocus when editing
         setShowEditor(true);
     };
 
@@ -341,66 +172,10 @@ export default function SubmitExpense() {
     }, [createdExpenseData, updatedExpenseData]);
 
     useEffect(() => {
-        /**
-         * Only auto-select category when:
-         * - Not editing existing item
-         * - AND there is no selected category yet
-         */
-        if (!editedItem && !selectedCategory && createdCategoryData) {
-            setItemFormValue('category', createdCategoryData?.id ?? '');
-        }
-    }, [createdCategoryData]);
-
-    useEffect(() => {
         if (items && items.length > 0) {
             setDraftedItems(items);
         }
     }, [items]);
-
-    useEffect(() => {
-        if (!showEditor) return;
-        shouldFocusNameRef.current = true;
-        const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-            handleCloseEditor();
-            Keyboard.dismiss();
-            return true;
-        });
-        return () => sub.remove();
-    }, [showEditor]);
-
-    useEffect(() => {
-        if (!addCategoryVisible) return;
-        setTimeout(() => {
-            const targetY = inlineCategoryY.current > 0 ? Math.max(inlineCategoryY.current - 12, 0) : 0;
-            editorScrollRef.current?.scrollTo({ y: targetY, animated: true });
-        }, 120);
-    }, [addCategoryVisible]);
-
-    useEffect(() => {
-        if (!showEditor) return;
-        focusNameInput();
-    }, [showEditor, focusNameInput]);
-
-    useEffect(() => {
-        const showSubscription = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (e) => {
-                // do something later
-            }
-        );
-        const hideSubscription = Keyboard.addListener(
-            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
-                const noValues = itemValues.every((value) => !value || value === '');
-                if (noValues && showEditor) {
-                    handleCloseEditor();
-                }
-            }
-        );
-
-        return () => {
-            showSubscription.remove();
-            hideSubscription.remove();
-        };
-    }, [itemValues]);
 
     useEffect(() => {
         if (!confirmedLocation || !confirmedLocation.placeName || !draftedExpense) {
@@ -416,44 +191,6 @@ export default function SubmitExpense() {
             },
         });
     }, [confirmedLocation]);
-
-    useEffect(() => {
-        // Fallback to USD / en-US when settings are unavailable
-        const locale = defaultLanguage?.value ?? 'en-US';
-        const currency = defaultCurrency?.value ?? 'USD';
-
-        const formatter = new Intl.NumberFormat(locale, {
-            style: "currency",
-            currency,
-        });
-
-        // 1️⃣ Fraction Digits
-        const resolvedFD = formatter.resolvedOptions().maximumFractionDigits;
-
-        const maximumFractionDigits =
-            UX_ZERO_DECIMAL.includes(currency)
-            ? 0
-            : resolvedFD ?? 2;
-
-        setMaximumFD(maximumFractionDigits);
-
-        // 2️⃣ Currency Symbol
-        let symbol = currency; // safer fallback
-
-        try {
-            if (typeof formatter.formatToParts === "function") {
-                const parts = formatter.formatToParts(0);
-                symbol =  parts.find(p => p.type === "currency")?.value ?? symbol;
-            } else {
-                const formatted = formatter.format(0);
-                symbol = formatted.replace(/[\d\s.,-]/g, "") || symbol;
-            }
-        } catch {
-            symbol = currency;
-        }
-
-        setCurrencySymbol(symbol);
-    }, [defaultCurrency?.value, defaultLanguage?.value]);
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom', 'left', 'right']}>
@@ -577,131 +314,27 @@ export default function SubmitExpense() {
                 animationType="slide"
                 presentationStyle="fullScreen"
                 onRequestClose={handleCloseEditor}
-                onShow={focusNameInput}
                 onDismiss={() => setShowEditor(false)}
             >
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={{ flex: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom }}>
-                        <View style={styles.editorHeader}>
-                            <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
-                            <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
-                                <MaterialCommunityIcons name="close" size={20} color="#111" />
-                            </TouchableOpacity>
+                    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+                        <View style={{ flex: 1, paddingBottom: 16 }}>
+                            <View style={styles.editorHeader}>
+                                <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
+                                <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
+                                    <MaterialCommunityIcons name="close" size={20} color="#111" />
+                                </TouchableOpacity>
+                            </View>
+                            <ItemEditor 
+                                visible={true}
+                                onSaved={(item) => itemEditorOnSavedHandler(item)}
+                                onClose={() => itemEditorOnCloseHandler()}
+                                expenseId={draftedExpense?.id ?? ""}
+                                initialValues={editedItem ?? {}}
+                            />
+
+                            <Animated.View style={fakeView} />
                         </View>
-                        <View style={styles.editorContent}>
-                            <ScrollView
-                                ref={editorScrollRef}
-                                style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20, paddingHorizontal: 20 }]}
-                                contentContainerStyle={styles.modalScrollContent}
-                                showsVerticalScrollIndicator={true}
-                                keyboardShouldPersistTaps="handled"
-                                bounces={true}
-                            >
-                                <Controller
-                                    control={itemFormControl}
-                                    rules={{ required: true }}
-                                    render={({ field: { onChange, onBlur, value } }) => (
-                                        <TextInput
-                                            ref={itemNameRef}
-                                            value={value}
-                                            onChangeText={onChange}
-                                            onBlur={onBlur}
-                                            placeholder="Item name"
-                                            multiline
-                                            onLayout={focusNameInput}
-                                            style={styles.itemNameInput}
-                                        />
-                                    )}
-                                    name="name"
-                                />
-
-                                <View style={styles.priceRow}>
-                                    <Text style={styles.pricePrefix}>{currencySymbol}</Text>
-                                    <Controller
-                                        control={itemFormControl}
-                                        rules={{ required: true }}
-                                        render={({ field: { onChange, onBlur, value } }) => (
-                                            <CurrencyInput
-                                                value={parseFloat(value)}
-                                                onChangeValue={onChange}
-                                                onBlur={onBlur}
-                                                keyboardType="decimal-pad"
-                                                prefix={undefined}
-                                                delimiter="."
-                                                separator=","
-                                                precision={maximumFD}
-                                                minValue={0}
-                                                style={styles.priceInput}
-                                                showPositiveSign={false}
-                                            />
-                                        )}
-                                        name="price"
-                                    />
-                                </View>
-
-                                <View style={styles.categoryHeader}>
-                                    <Text style={styles.categoryLabel}>Category</Text>
-                                    {!addCategoryVisible && (
-                                        <TouchableOpacity style={styles.categoryAddButton} onPress={handleAddCategory}>
-                                            <MaterialCommunityIcons name="plus" size={16} />
-                                            <Text style={styles.categoryAddText}>Add</Text>
-                                        </TouchableOpacity>
-                                    )}
-                                </View>
-                                {addCategoryVisible ? (
-                                    <View
-                                        style={styles.inlineCategoryContainer}
-                                        onLayout={(e) => {
-                                            inlineCategoryY.current = e.nativeEvent.layout.y;
-                                        }}
-                                    >
-                                        <TextInput
-                                            value={newCategoryName}
-                                            onChangeText={setNewCategoryName}
-                                            placeholder="Category name"
-                                            style={styles.addCategoryInput}
-                                            autoFocus
-                                        />
-                                        <View style={styles.addCategoryActions}>
-                                            <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
-                                                <Text style={styles.secondaryButtonText}>Cancel</Text>
-                                            </TouchableOpacity>
-                                            <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveCategoryHandler}>
-                                                <Text style={styles.primaryButtonText}>Save</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                ) : (
-                                    <View>
-                                        {isCategoriesLoading ? (
-                                            <ActivityIndicator size="small" />
-                                        ) : (
-                                            <FlatList
-                                                data={categories}
-                                                keyExtractor={categoryKeyExtractor}
-                                                renderItem={({ item }) => renderCategoryItem({ item })}
-                                                extraData={selectedCategory}
-                                                numColumns={CATEGORY_COLUMNS}
-                                                scrollEnabled={false}
-                                                columnWrapperStyle={styles.categoryRow}
-                                                contentContainerStyle={styles.categoryListContent}
-                                                keyboardShouldPersistTaps="handled"
-                                            />
-                                        )}
-                                    </View>
-                                )}
-                            </ScrollView>
-
-                            {!addCategoryVisible && (
-                                <View style={[styles.modalFooterButtons]}>
-                                    <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveOrUpdateItem(saveItemHandler)}>
-                                        <Text style={styles.primaryButtonText}>Save Item</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </View>
-
-                        <Animated.View style={fakeView} />
                     </View>
                 </TouchableWithoutFeedback>
             </Modal>
@@ -837,40 +470,6 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
     },
-    secondaryButton: {
-        backgroundColor: '#F4F4F4',
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-    },
-    secondaryButtonText: {
-        color: '#333',
-        fontSize: 15,
-        fontWeight: '500',
-    },
-    editorContent: {
-        flex: 1,
-        paddingBottom: 16,
-    },
-    addCategoryInput: {
-        borderWidth: 1,
-        borderColor: '#E0E0E0',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 15,
-        color: '#111',
-        backgroundColor: '#F8F8F8',
-    },
-    addCategoryActions: {
-        flexDirection: 'row',
-        gap: 10,
-    },
-    inlineCategoryContainer: {
-        gap: 10,
-    },
     modalCloseButton: {
         width: 38,
         height: 38,
@@ -890,113 +489,5 @@ const styles = StyleSheet.create({
         fontSize: 22,
         color: '#111',
         fontFamily: 'ZalandoSansExpanded_900Black',
-    },
-    modalScroll: {
-        flex: 1,
-    },
-    modalScrollContent: {
-        flexGrow: 1,
-        gap: 16,
-    },
-    itemNameInput: {
-        fontSize: 24,
-        fontWeight: '600',
-        color: '#111',
-        minHeight: 40,
-        textAlignVertical: 'top',
-        paddingRight: 52,
-        paddingLeft: 0,
-    },
-    priceLabel: {
-        fontSize: 14,
-        color: '#555',
-    },
-    priceRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        borderBottomWidth: 1,
-        borderColor: '#E0E0E0',
-        paddingBottom: 8,
-    },
-    pricePrefix: {
-        fontSize: 24,
-        color: '#444',
-    },
-    priceInput: {
-        flex: 1,
-        fontSize: 32,
-        fontWeight: '700',
-        color: '#111',
-        paddingVertical: 0,
-    },
-    categoryLabel: {
-        fontSize: 16,
-        color: '#555',
-    },
-    categoryHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    categoryAddButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 10,
-        borderWidth: 1,
-        backgroundColor: '#EFEFFF',
-        borderColor: '#D0D0FF',
-    },
-    categoryAddText: {
-        fontSize: 13,
-        fontWeight: '600',
-    },
-    categoryListContent: {
-        gap: 10,
-    },
-    categoryRow: {
-        gap: 10,
-    },
-    categoryChip: {
-        flexDirection: 'row',
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        borderRadius: 12,
-        backgroundColor: '#F4F6FB',
-        alignItems: 'center',
-        justifyContent: 'center',
-        flex: 1,
-    },
-    categoryChipContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 6,
-    },
-    categoryChipSelected: {
-        backgroundColor: '#E4F5EB',
-    },
-    categoryChipText: {
-        color: '#333',
-        fontSize: 14,
-        fontWeight: '500',
-        flex: 1,
-    },
-    categoryChipTextSelected: {
-        color: '#2E7D32',
-        fontWeight: '700',
-    },
-    modalFooterButtons: {
-        paddingHorizontal: 20,
-        minHeight: 48,
-    },
-    modalActionButton: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 48,
     },
 });
