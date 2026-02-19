@@ -11,6 +11,7 @@ import { store } from '@/redux/store';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_900Black } from '@expo-google-fonts/inter';
 import { Playfair_400Regular, Playfair_600SemiBold, Playfair_900Black, Playfair_900Black_Italic, useFonts } from '@expo-google-fonts/playfair';
 import { ZalandoSansExpanded_900Black } from '@expo-google-fonts/zalando-sans-expanded';
+import { Header } from '@react-navigation/elements';
 import { useEffect } from 'react';
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Provider } from 'react-redux';
@@ -34,7 +35,7 @@ export default function RootLayout() {
     ...DefaultTheme,
     colors: {
       ...DefaultTheme.colors,
-      background: 'whitesmoke',
+      background: '#FFFFFF',
     },
   };
 
@@ -64,7 +65,24 @@ export default function RootLayout() {
     <Provider store={store}>
       <ThemeProvider value={colorScheme === 'dark' ? customDarkTheme : customLightTheme}>
         <KeyboardProvider>
-          <Stack screenOptions={{ headerLeft: (props) => <HeaderBackButton {...props} /> }}>
+          <Stack 
+            screenOptions={{ 
+              headerLeft: (props) => <HeaderBackButton {...props} />,
+              header: (props) => {
+                return (
+                  <Header
+                    {...props}
+                    headerLeftContainerStyle={{ paddingLeft: 16 }}
+                    headerRightContainerStyle={{ paddingRight: 16 }}
+                    headerStyle={[props.options.headerStyle, { height: 120 }]}
+                    headerTitleStyle={props.options.headerTitleStyle}
+                    title={typeof props.options.headerTitle === 'string' ? props.options.headerTitle : props.route.name}
+                    headerLeft={props.options.headerLeft}
+                  />
+                );
+              }
+            }}
+          >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="(modals)" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
             <Stack.Screen name="expenses" options={{ headerShown: false }} />

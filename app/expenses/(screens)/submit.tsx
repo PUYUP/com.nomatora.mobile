@@ -70,9 +70,7 @@ export default function SubmitExpense() {
     // keyboard
     const { height } = useGradualAnimation(insets);
     const fakeView = useAnimatedStyle(() => {
-        return {
-            height: Math.abs(height.value) - insets.bottom,
-        };
+        return { height: Math.abs(height.value) - insets.bottom };
     }, [height, insets.bottom]);
     
     // redux
@@ -453,7 +451,7 @@ export default function SubmitExpense() {
     }, [defaultCurrency?.value, defaultLanguage?.value]);
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFF' }} edges={['bottom', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }} edges={['bottom', 'left', 'right']}>
             <Stack.Screen
                 options={{
                     headerTitle: 'Expense',
@@ -480,14 +478,14 @@ export default function SubmitExpense() {
             <View style={{ flex: 1, justifyContent: 'space-between' }}>
                 {isItemsLoading 
                     ? (
-                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'whitesmoke' }}>
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                             <ActivityIndicator size="large" />
                         </View>
                     ) 
                     : (
                     <FlatList
-                        bounces={false}
-                        overScrollMode="never"
+                        bounces={true}
+                        overScrollMode="auto"
                         data={items}
                         keyboardShouldPersistTaps="handled"
                         renderItem={({ item }) => (
@@ -500,7 +498,7 @@ export default function SubmitExpense() {
                             />
                         )}
                         keyExtractor={item => item.id}
-                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12, flexGrow: 1, backgroundColor: 'whitesmoke' }}
+                        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, gap: 12, flexGrow: 1 }}
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <Text style={styles.emptyTitle}>No items yet</Text>
@@ -586,14 +584,14 @@ export default function SubmitExpense() {
                                 <MaterialCommunityIcons name="close" size={22} color="#111" />
                             </TouchableOpacity>
                         </View>
-                        <View style={[styles.editorContent, { padding: 0, paddingBottom: insets.bottom }]}>
+                        <View style={styles.editorContent}>
                             <ScrollView
                                 ref={editorScrollRef}
                                 style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20, paddingHorizontal: 20 }]}
                                 contentContainerStyle={styles.modalScrollContent}
                                 showsVerticalScrollIndicator={true}
                                 keyboardShouldPersistTaps="handled"
-                                bounces={false}
+                                bounces={true}
                                 overScrollMode="never"
                             >
                                 <Controller
@@ -852,7 +850,7 @@ const styles = StyleSheet.create({
     },
     editorContent: {
         flex: 1,
-        padding: 20,
+        paddingBottom: 16,
     },
     addCategoryInput: {
         borderWidth: 1,
@@ -991,6 +989,7 @@ const styles = StyleSheet.create({
     },
     modalFooterButtons: {
         paddingHorizontal: 20,
+        minHeight: 48,
     },
     modalActionButton: {
         flex: 1,

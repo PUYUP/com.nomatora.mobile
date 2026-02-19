@@ -102,11 +102,11 @@ export default function ExpenseItem({ item, currencyCode, languageCode, onRemove
 
             <View style={styles.bottomRow}>
                 <View style={styles.quantityContainer}>
-                    <TouchableOpacity onPress={() => handleDecrease(id)} style={styles.quantityButton}>
+                    <TouchableOpacity onPress={() => handleDecrease(id)} style={[styles.quantityButton, { backgroundColor: 'lavenderblush'}]}>
                         <MaterialCommunityIcons name="minus" size={18} color="#666" />
                     </TouchableOpacity>
                     <Text style={styles.quantityText}>{quantity}</Text>
-                    <TouchableOpacity onPress={() => handleIncrease(id)} style={styles.quantityButton}>
+                    <TouchableOpacity onPress={() => handleIncrease(id)} style={[styles.quantityButton, { backgroundColor: 'honeydew'}]}>
                         <MaterialCommunityIcons name="plus" size={18} color="#666" />
                     </TouchableOpacity>
                 </View>
@@ -142,10 +142,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     name: {
-        fontSize: 16,
+        fontSize: 17,
         color: COLORS.primaryText,
         marginBottom: 4,
-        fontFamily: FONTS.regular,
+        fontFamily: FONTS.semiBold,
     },
     category: {
         fontSize: 12,

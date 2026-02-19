@@ -52,6 +52,12 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
+        <Pressable onPress={() => router.push('/(modals)/item-editor')}>
+          <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
+            <Text style={{ color: '#FFFFFF' }}>Add Item</Text>
+          </View>
+        </Pressable>
+
         <Pressable onPress={() => router.push('/location-selector-map')}>
           <View style={{ padding: 12, backgroundColor: '#007AFF', borderRadius: 8 }}>
             <Text style={{ color: '#FFFFFF' }}>Modal Demo</Text>

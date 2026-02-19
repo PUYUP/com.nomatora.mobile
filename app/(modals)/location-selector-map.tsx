@@ -1,4 +1,5 @@
 
+import HeaderBackButton from '@/components/partials/header-back-button';
 import AnimatedOval from '@/components/ui/animated-oval';
 import MapMarker from '@/components/ui/mappin';
 import { getCurrentLocation, isLocationServiceEnabled, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
@@ -378,23 +379,65 @@ export default function LocationSelectorMap() {
     );
   };
 
+  if (1 > 10) {
+    return (
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={true}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <Stack.Screen options={{
+            headerTitle: `Select ${purposeLabel}`,
+            headerTransparent: true,
+            headerTitleStyle: {
+              fontSize: 20,
+              fontFamily: 'ZalandoSansExpanded_900Black',
+              color: '#1F3D2B',
+            },
+            headerLeft: (props) => {
+              return <HeaderBackButton {...props} />
+            }
+          }} />
+
+          <View style={styles.page}>
+            <View style={{ height: 'auto', zIndex: 10 }}>
+              <View style={{ paddingHorizontal: 16, position: 'relative', marginBottom: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TextInput
+                  placeholder="Search places..."
+                  value={searchPlace}
+                  onChangeText={placeSearchHandler}
+                  style={styles.placeSearchInput}
+                />
+
+                {searchPlace.length > 0 && (
+                  <TouchableOpacity onPress={() => clearSearchHandler()} style={styles.clearButton} accessibilityLabel="Clear search">
+                    <MaterialCommunityIcons name="close" size={22} />
+                  </TouchableOpacity>
+                )}
+
+                {isSearchingPlaces ? (
+                  <ActivityIndicator size="small" style={styles.searchSpinner} />
+                ) : null}
+              </View>
+
+              
+            </View>
+          </View>
+        </SafeAreaView>
+      </TouchableWithoutFeedback>
+    )
+  }
+
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={true}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <Stack.Screen options={{
-          title: `Select ${purposeLabel}`,
+          headerTitle: `Select ${purposeLabel}`,
           headerTransparent: true,
           headerTitleStyle: {
             fontSize: 20,
             fontFamily: 'ZalandoSansExpanded_900Black',
             color: '#1F3D2B',
           },
-          headerLeft: () => {
-            return (
-              <TouchableOpacity onPress={() => router.back()} style={styles.closeButton} accessibilityLabel="Close">
-                <MaterialCommunityIcons name="keyboard-backspace" size={26} />
-              </TouchableOpacity>
-            )
+          headerLeft: (props) => {
+            return <HeaderBackButton {...props} />
           }
         }} />
         

@@ -146,7 +146,6 @@ export default function CurrencySelector() {
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
-        backgroundColor: 'whitesmoke',
     },
     container: {
         flex: 1,
