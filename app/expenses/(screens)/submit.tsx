@@ -10,7 +10,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { ActivityIndicator, Alert, FlatList, Keyboard, Modal, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Keyboard, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -320,10 +320,10 @@ export default function SubmitExpense() {
                     <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
                         <View style={{ flex: 1, paddingBottom: 16 }}>
                             <View style={styles.editorHeader}>
-                                <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
                                 <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
-                                    <MaterialCommunityIcons name="close" size={20} color="#111" />
+                                    <MaterialCommunityIcons name="chevron-left" size={30} color="#111" style={{ marginRight: 1 }} />
                                 </TouchableOpacity>
+                                <Text style={styles.editorTitle}>{editedItem ? 'Edit Item' : 'Add Item'}</Text>
                             </View>
                             <ItemEditor 
                                 visible={true}
@@ -474,20 +474,24 @@ const styles = StyleSheet.create({
         width: 38,
         height: 38,
         borderRadius: 19,
+        marginRight: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F2F2F2',
+        borderWidth: 1,
+        borderColor: '#E5E5E5',
+        backgroundColor: '#FFFFFF',
     },
     editorHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingBottom: 4,
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
     },
     editorTitle: {
         fontSize: 22,
         color: '#111',
+        marginRight: 50,
+        flex: 1,
         fontFamily: 'ZalandoSansExpanded_900Black',
+        textAlign: Platform.OS === 'ios' ? 'center' : 'left',
     },
 });

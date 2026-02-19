@@ -154,7 +154,6 @@ const styles = StyleSheet.create({
     },
     category: {
         fontSize: 12,
-        marginBottom: Platform.OS === 'ios' ? 10 : 6,
         color: COLORS.mutedText,
         fontFamily: FONTS.semiBold,
     },
@@ -170,6 +169,7 @@ const styles = StyleSheet.create({
         marginLeft: 8,
     },
     bottomRow: {
+        paddingTop: 10,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
