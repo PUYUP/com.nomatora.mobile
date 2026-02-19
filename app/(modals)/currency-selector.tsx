@@ -3,7 +3,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { countries } from 'countries-list';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccessibilityInfo, FlatList, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { AccessibilityInfo, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface CountryItem {
@@ -90,49 +90,55 @@ export default function CurrencySelector() {
     
     return (
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-            <View style={styles.container}>
-                <View style={styles.searchBox}>
-                    <TextInput
-                        ref={inputRef}
-                        style={[styles.searchInput]}
-                        value={query}
-                        onChangeText={handleChangeText}
-                        placeholder={'Search by country name...'}
-                        placeholderTextColor="#9CA3AF"
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => {
-                            // slight delay so item tap is registered before hiding
-                            setTimeout(() => setIsFocused(false), 150);
-                        }}
-                        returnKeyType="search"
-                        clearButtonMode="never"
-                        autoCorrect={false}
-                        autoCapitalize="none"
-                        accessibilityLabel="Search input"
-                        accessibilityHint="Type to filter the list"
-                    />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.container}>
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.container}>
+                        <View style={styles.searchBox}>
+                            <TextInput
+                                ref={inputRef}
+                                style={[styles.searchInput]}
+                                value={query}
+                                onChangeText={handleChangeText}
+                                placeholder={'Search by country name...'}
+                                placeholderTextColor="#9CA3AF"
+                                onFocus={() => setIsFocused(true)}
+                                onBlur={() => {
+                                    // slight delay so item tap is registered before hiding
+                                    setTimeout(() => setIsFocused(false), 150);
+                                }}
+                                returnKeyType="search"
+                                clearButtonMode="never"
+                                autoCorrect={false}
+                                autoCapitalize="none"
+                                accessibilityLabel="Search input"
+                                accessibilityHint="Type to filter the list"
+                            />
 
-                    {query.length > 0 && (
-                        <TouchableOpacity
-                            onPress={handleClear}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityRole="button"
-                            accessibilityLabel="Clear search"
-                        >
-                            <MaterialCommunityIcons name="close-circle" size={26} color="#9CA3AF" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-                <FlatList
-                    style={{ flex: 1, paddingHorizontal: 12 }}
-                    data={filtered}
-                    keyExtractor={(item) => item.code}
-                    renderItem={renderItem}
-                    keyboardShouldPersistTaps="handled"
-                    accessibilityLabel="Currency list"
-                    accessibilityHint="Browse and select a currency"
-                />
-            </View>
+                            {query.length > 0 && (
+                                <TouchableOpacity
+                                    onPress={handleClear}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Clear search"
+                                >
+                                    <MaterialCommunityIcons name="close-circle" size={26} color="#9CA3AF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <FlatList
+                            style={{ flex: 1, paddingHorizontal: 12 }}
+                            data={filtered}
+                            keyExtractor={(item) => item.code}
+                            renderItem={renderItem}
+                            keyboardShouldPersistTaps="handled"
+                            accessibilityLabel="Currency list"
+                            accessibilityHint="Browse and select a currency"
+                        />
+                    </View>
+                </TouchableWithoutFeedback>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     )
 }

@@ -12,7 +12,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Stack, useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
-import { ActivityIndicator, Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, FlatList, InteractionManager, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import CurrencyInput from 'react-native-currency-input';
 import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
@@ -578,130 +578,132 @@ export default function SubmitExpense() {
                 onShow={focusNameInput}
                 onDismiss={() => setShowEditor(false)}
             >
-                <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
-                    <View style={styles.editorHeader}>
-                        <Text style={styles.editorTitle}>{getItemFormValues('id') ? 'Edit Item' : 'New Item'}</Text>
-                        <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
-                            <MaterialCommunityIcons name="close" size={22} color="#111" />
-                        </TouchableOpacity>
-                    </View>
-                    <View style={[styles.editorContent, { padding: 0, paddingBottom: insets.bottom }]}>
-                        <ScrollView
-                            ref={editorScrollRef}
-                            style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20, paddingHorizontal: 20 }]}
-                            contentContainerStyle={styles.modalScrollContent}
-                            showsVerticalScrollIndicator={true}
-                            keyboardShouldPersistTaps="handled"
-                            bounces={false}
-                            overScrollMode="never"
-                        >
-                            <Controller
-                                control={itemFormControl}
-                                rules={{ required: true }}
-                                render={({ field: { onChange, onBlur, value } }) => (
-                                    <TextInput
-                                        ref={itemNameRef}
-                                        value={value}
-                                        onChangeText={onChange}
-                                        onBlur={onBlur}
-                                        placeholder="Item name"
-                                        multiline
-                                        onLayout={focusNameInput}
-                                        style={styles.itemNameInput}
-                                    />
-                                )}
-                                name="name"
-                            />
-
-                            <Text style={styles.priceLabel}>Item Price</Text>
-                            <View style={styles.priceRow}>
-                                <Text style={styles.pricePrefix}>{currencySymbol}</Text>
+                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+                        <View style={styles.editorHeader}>
+                            <Text style={styles.editorTitle}>{getItemFormValues('id') ? 'Edit Item' : 'Add Item'}</Text>
+                            <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseEditor}>
+                                <MaterialCommunityIcons name="close" size={22} color="#111" />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={[styles.editorContent, { padding: 0, paddingBottom: insets.bottom }]}>
+                            <ScrollView
+                                ref={editorScrollRef}
+                                style={[styles.modalScroll, { marginBottom: addCategoryVisible ? 0 : 20, paddingHorizontal: 20 }]}
+                                contentContainerStyle={styles.modalScrollContent}
+                                showsVerticalScrollIndicator={true}
+                                keyboardShouldPersistTaps="handled"
+                                bounces={false}
+                                overScrollMode="never"
+                            >
                                 <Controller
                                     control={itemFormControl}
                                     rules={{ required: true }}
                                     render={({ field: { onChange, onBlur, value } }) => (
-                                        <CurrencyInput
-                                            value={parseFloat(value)}
-                                            onChangeValue={onChange}
+                                        <TextInput
+                                            ref={itemNameRef}
+                                            value={value}
+                                            onChangeText={onChange}
                                             onBlur={onBlur}
-                                            keyboardType="decimal-pad"
-                                            prefix={undefined}
-                                            delimiter="."
-                                            separator=","
-                                            precision={maximumFD}
-                                            minValue={0}
-                                            style={styles.priceInput}
-                                            showPositiveSign={false}
+                                            placeholder="Item name"
+                                            multiline
+                                            onLayout={focusNameInput}
+                                            style={styles.itemNameInput}
                                         />
                                     )}
-                                    name="price"
+                                    name="name"
                                 />
-                            </View>
 
-                            <View style={styles.categoryHeader}>
-                                <Text style={styles.categoryLabel}>Category</Text>
-                                {!addCategoryVisible && (
-                                    <TouchableOpacity style={styles.categoryAddButton} onPress={handleAddCategory}>
-                                        <MaterialCommunityIcons name="plus" size={16} />
-                                        <Text style={styles.categoryAddText}>Add</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-                            {addCategoryVisible ? (
-                                <View
-                                    style={styles.inlineCategoryContainer}
-                                    onLayout={(e) => {
-                                        inlineCategoryY.current = e.nativeEvent.layout.y;
-                                    }}
-                                >
-                                    <TextInput
-                                        value={newCategoryName}
-                                        onChangeText={setNewCategoryName}
-                                        placeholder="Category name"
-                                        style={styles.addCategoryInput}
-                                        autoFocus
+                                <Text style={styles.priceLabel}>Item Price</Text>
+                                <View style={styles.priceRow}>
+                                    <Text style={styles.pricePrefix}>{currencySymbol}</Text>
+                                    <Controller
+                                        control={itemFormControl}
+                                        rules={{ required: true }}
+                                        render={({ field: { onChange, onBlur, value } }) => (
+                                            <CurrencyInput
+                                                value={parseFloat(value)}
+                                                onChangeValue={onChange}
+                                                onBlur={onBlur}
+                                                keyboardType="decimal-pad"
+                                                prefix={undefined}
+                                                delimiter="."
+                                                separator=","
+                                                precision={maximumFD}
+                                                minValue={0}
+                                                style={styles.priceInput}
+                                                showPositiveSign={false}
+                                            />
+                                        )}
+                                        name="price"
                                     />
-                                    <View style={styles.addCategoryActions}>
-                                        <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
-                                            <Text style={styles.secondaryButtonText}>Cancel</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={handleSubmitCategory}>
-                                            <Text style={styles.primaryButtonText}>Save</Text>
-                                        </TouchableOpacity>
-                                    </View>
                                 </View>
-                            ) : (
-                                <View>
-                                    {isCategoriesLoading ? (
-                                        <ActivityIndicator size="small" />
-                                    ) : (
-                                        <FlatList
-                                            data={categories}
-                                            keyExtractor={categoryKeyExtractor}
-                                            renderItem={({ item }) => renderCategoryItem({ item })}
-                                            extraData={selectedCategory}
-                                            numColumns={CATEGORY_COLUMNS}
-                                            scrollEnabled={false}
-                                            columnWrapperStyle={styles.categoryRow}
-                                            contentContainerStyle={styles.categoryListContent}
-                                            keyboardShouldPersistTaps="handled"
-                                        />
+
+                                <View style={styles.categoryHeader}>
+                                    <Text style={styles.categoryLabel}>Category</Text>
+                                    {!addCategoryVisible && (
+                                        <TouchableOpacity style={styles.categoryAddButton} onPress={handleAddCategory}>
+                                            <MaterialCommunityIcons name="plus" size={16} />
+                                            <Text style={styles.categoryAddText}>Add</Text>
+                                        </TouchableOpacity>
                                     )}
+                                </View>
+                                {addCategoryVisible ? (
+                                    <View
+                                        style={styles.inlineCategoryContainer}
+                                        onLayout={(e) => {
+                                            inlineCategoryY.current = e.nativeEvent.layout.y;
+                                        }}
+                                    >
+                                        <TextInput
+                                            value={newCategoryName}
+                                            onChangeText={setNewCategoryName}
+                                            placeholder="Category name"
+                                            style={styles.addCategoryInput}
+                                            autoFocus
+                                        />
+                                        <View style={styles.addCategoryActions}>
+                                            <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
+                                                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={handleSubmitCategory}>
+                                                <Text style={styles.primaryButtonText}>Save</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                ) : (
+                                    <View>
+                                        {isCategoriesLoading ? (
+                                            <ActivityIndicator size="small" />
+                                        ) : (
+                                            <FlatList
+                                                data={categories}
+                                                keyExtractor={categoryKeyExtractor}
+                                                renderItem={({ item }) => renderCategoryItem({ item })}
+                                                extraData={selectedCategory}
+                                                numColumns={CATEGORY_COLUMNS}
+                                                scrollEnabled={false}
+                                                columnWrapperStyle={styles.categoryRow}
+                                                contentContainerStyle={styles.categoryListContent}
+                                                keyboardShouldPersistTaps="handled"
+                                            />
+                                        )}
+                                    </View>
+                                )}
+                            </ScrollView>
+
+                            {!addCategoryVisible && (
+                                <View style={[styles.modalFooterButtons]}>
+                                    <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveOrUpdateItem(saveItemHandler)}>
+                                        <Text style={styles.primaryButtonText}>Save Item</Text>
+                                    </TouchableOpacity>
                                 </View>
                             )}
-                        </ScrollView>
+                        </View>
 
-                        {!addCategoryVisible && (
-                            <View style={[styles.modalFooterButtons]}>
-                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveOrUpdateItem(saveItemHandler)}>
-                                    <Text style={styles.primaryButtonText}>Save Item</Text>
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                        <Animated.View style={fakeView} />
                     </View>
-
-                    <Animated.View style={fakeView} />
-                </View>
+                </TouchableWithoutFeedback>
             </Modal>
         </SafeAreaView>
     );
