@@ -485,7 +485,6 @@ export default function SubmitExpense() {
                     : (
                     <FlatList
                         bounces={true}
-                        overScrollMode="auto"
                         data={items}
                         keyboardShouldPersistTaps="handled"
                         renderItem={({ item }) => (
@@ -592,7 +591,6 @@ export default function SubmitExpense() {
                                 showsVerticalScrollIndicator={true}
                                 keyboardShouldPersistTaps="handled"
                                 bounces={true}
-                                overScrollMode="never"
                             >
                                 <Controller
                                     control={itemFormControl}

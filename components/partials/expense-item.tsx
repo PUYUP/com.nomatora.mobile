@@ -2,7 +2,7 @@ import { UX_ZERO_DECIMAL } from "@/constants/settings";
 import { ItemResponse, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const FONTS = {
     regular: 'Inter_400Regular',
@@ -20,7 +20,7 @@ const COLORS = {
 const SIZES = {
     cardRadius: 20,
     cardPadding: 16,
-    rowGap: 12,
+    rowGap: 0,
     buttonSize: 36,
     quantitySpacing: 16,
 };
@@ -149,11 +149,12 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 17,
         color: COLORS.primaryText,
-        marginBottom: 4,
+        marginBottom: Platform.OS === 'ios' ? 3 : 0,
         fontFamily: FONTS.semiBold,
     },
     category: {
         fontSize: 12,
+        marginBottom: Platform.OS === 'ios' ? 10 : 6,
         color: COLORS.mutedText,
         fontFamily: FONTS.semiBold,
     },

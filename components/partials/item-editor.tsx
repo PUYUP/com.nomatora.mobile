@@ -297,11 +297,10 @@ export function ItemEditor({
                 <ScrollView
                     ref={editorScrollRef}
                     style={styles.modalScroll}
-                    contentContainerStyle={styles.modalScrollContent}
+                    contentContainerStyle={[styles.modalScrollContent, { paddingBottom: Platform.OS === 'ios' ? 16 : 32 }]}
                     showsVerticalScrollIndicator
                     keyboardShouldPersistTaps="handled"
                     bounces={true}
-                    overScrollMode="never"
                 >
                     <Controller
                         control={control}
