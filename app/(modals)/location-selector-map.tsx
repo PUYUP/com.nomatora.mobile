@@ -2,19 +2,19 @@
 import HeaderBackButton from '@/components/partials/header-back-button';
 import AnimatedOval from '@/components/ui/animated-oval';
 import MapMarker from '@/components/ui/mappin';
-import { getCurrentLocation, isLocationServiceEnabled, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
+import { getCurrentLocation, isLocationServiceEnabled, openAppSettings, openLocationSettings, reverseGeocodeLocation } from '@/libs/location';
 import { supabase } from '@/libs/supabase';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import debounce from 'lodash.debounce';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, Animated, AppState, FlatList, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 
 export default function LocationSelectorMap() {
-  const insets = useSafeAreaInsets();
+  const appState = useRef(AppState.currentState);
   const dispatch = useDispatch();
   const router = useRouter();
   const { returnTo, initialLat, initialLng, initialPlaceName, purpose, requestId } = useLocalSearchParams<{
@@ -33,7 +33,7 @@ export default function LocationSelectorMap() {
   const [isReverseGeocodingLoading, setIsReverseGeocodingLoading] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isRequestingPermission, setIsRequestingPermission] = useState(true);
-  const [isLocationEnabled, setIsLocationEnabled] = useState(false);
+  const [isLocationNotEnabled, setIsLocationNotEnabled] = useState(true);
   const [mapLayout, setMapLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const pinScale = useRef(new Animated.Value(1)).current;
   const pinTranslate = useRef(new Animated.Value(0)).current;
@@ -62,7 +62,7 @@ export default function LocationSelectorMap() {
     setIsRequestingPermission(true);
 
     const locationEnabled = await isLocationServiceEnabled();
-    setIsLocationEnabled(locationEnabled);
+    setIsLocationNotEnabled(!locationEnabled); // false means location is enabled, true means it's not
 
     if (!locationEnabled) {
       setPermissionError('Location services are disabled. Enable location services then press Refresh.');
@@ -140,6 +140,33 @@ export default function LocationSelectorMap() {
   useEffect(() => {
     initializeLocationFlow();
   }, [initializeLocationFlow]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        console.log('App has come to the foreground!');
+        const locationEnabled = await isLocationServiceEnabled();
+        setIsLocationNotEnabled(!locationEnabled);
+
+        // refresh location if enabled
+        if (locationEnabled) {
+          locationRefreshHandler();
+        }
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        console.log('App has gone to the background or become inactive!');
+        // Pause any tasks here
+      }
+
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   const updateLocationFromCoords = async (latitude: number, longitude: number) => {
     const geocoded = await reverseGeocodeLocation(latitude, longitude);
@@ -282,10 +309,14 @@ export default function LocationSelectorMap() {
   };
 
   const handleOpenAppSettings = () => {
-    openLocationSettings();
+    if (isLocationNotEnabled) {
+      openLocationSettings();
+    } else {
+      openAppSettings();
+    }
   };
 
-  const handleRefresh = () => {
+  const locationRefreshHandler = () => {
     initializeLocationFlow();
   };
 
@@ -360,18 +391,18 @@ export default function LocationSelectorMap() {
           <MaterialCommunityIcons name="map-marker-off" size={40} color="#6b7280" />
         )}
         <Text style={styles.permissionTitle}>
-          {isRequestingPermission && !permissionError ? 'Requesting location permission…' : (isLocationEnabled ? 'Location permission needed' : 'Location services disabled')}
+          {isRequestingPermission && !permissionError ? 'Requesting location permission…' : (isLocationNotEnabled ? 'Location services disabled' : 'Location permission needed')}
         </Text>
         <Text style={styles.permissionMessage}>
-          {permissionError || 'Please enable location access in Settings to select a location.'}
+          {permissionError || (isLocationNotEnabled ? 'Please enable location services to continue.' : 'Please enable location access in Settings to select a location.')}
         </Text>
         {!isRequestingPermission && permissionError ? (
           <TouchableOpacity
             style={[styles.primaryButton, { flex: 0, paddingHorizontal: 30, borderRadius: 50 }]}
-            onPress={isLocationEnabled ? handleOpenAppSettings : handleRefresh}
+            onPress={isLocationNotEnabled ? handleOpenAppSettings : locationRefreshHandler}
           >
             <Text style={styles.primaryButtonText}>
-              {isLocationEnabled ? 'Open Settings' : 'Refresh'}
+              {isLocationNotEnabled ? 'Open Settings' : 'Refresh'}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -394,7 +425,7 @@ export default function LocationSelectorMap() {
           }
         }} />
         
-        {isRequestingPermission || permissionError || !isLocationEnabled ? (
+        {isRequestingPermission || permissionError || isLocationNotEnabled ? (
           renderPermissionBlock()
         ) : (
         <View style={styles.page}>

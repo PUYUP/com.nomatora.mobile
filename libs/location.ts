@@ -30,18 +30,28 @@ export type PermissionResult =
   | { ok: false; error: LocationError }
 
 // Opens the system settings screen; safe to call from other components.
-export const openLocationSettings = () => {
+export const openAppSettings = () => {
   Linking.openSettings().catch(() => {})
 }
 
+export const openLocationSettings = () => {
+  if (Platform.OS === 'ios') {
+    // Opens the app-specific settings on iOS
+    Linking.openURL('app-settings:');
+  } else {
+    // Opens location settings on Android
+    Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+  }
+}
+
 // Notify the user and open system settings to enable location.
-export const openLocationSettingsWithToast = (message = 'Enable location permission in Settings.') => {
+export const openAppSettingsWithToast = (message = 'Enable location permission in Settings.') => {
   if (Platform.OS === 'android') {
     ToastAndroid.show(message, ToastAndroid.LONG)
   } else {
     Alert.alert('Enable Location', message)
   }
-  openLocationSettings()
+  openAppSettings()
 }
 
 const normalizeError = (error: unknown): LocationError => {
@@ -88,7 +98,7 @@ export const requestLocationPermission = async (): Promise<PermissionResult> => 
 
     if (request.status !== Location.PermissionStatus.GRANTED) {
       if (!request.canAskAgain) {
-        openLocationSettingsWithToast()
+        openAppSettingsWithToast()
       }
       return {
         ok: false,
@@ -191,6 +201,6 @@ export const ensureLocationServicesEnabled = async (message = 'Please enable loc
   const enabled = await isLocationServiceEnabled()
   if (enabled) return true
 
-  openLocationSettingsWithToast(message)
+  openAppSettingsWithToast(message)
   return false
 }
