@@ -9,3 +9,15 @@ export interface CoordsData {
     timestamp: number
     placeName: string
 }
+
+export interface PlaceData {
+    properties: {
+        name: string
+    }
+    geometry: {
+        coordinate: {
+            latitude: number
+            longitude: number
+        }
+    }
+}

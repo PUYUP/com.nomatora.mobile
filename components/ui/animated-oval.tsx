@@ -1,7 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated, Dimensions, Easing, StyleSheet, View } from "react-native";
-
-const { width, height } = Dimensions.get("window");
+import { Animated, Easing, StyleSheet, View } from "react-native";
 
 export default function AnimatedOval() {
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
