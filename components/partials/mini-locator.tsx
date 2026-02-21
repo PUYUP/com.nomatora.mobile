@@ -4,8 +4,8 @@ import { getCurrentLocation, isLocationServiceEnabled, openAppSettings, openLoca
 import { PlaceData } from '@/models/location';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, AppState, Image, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
-import MapView, { Callout, Marker, Polyline, Region } from 'react-native-maps';
+import { ActivityIndicator, Animated, AppState, Image, Platform, StyleProp, StyleSheet, Text, TouchableOpacity, View, ViewStyle } from 'react-native';
+import MapView, { Callout, EdgePadding, Marker, Polyline, Region } from 'react-native-maps';
 import { useDispatch } from 'react-redux';
 
 type MiniLocatorProps = {
@@ -20,6 +20,7 @@ type MiniLocatorProps = {
 	places?: PlaceData[];
 	fitPlacesToMap?: boolean;
 	controlPosition?: { top?: number; right?: number; bottom?: number; left?: number };
+	mapPadding?: Partial<EdgePadding>;
 };
 
 type PlaceCoord = {
@@ -61,10 +62,11 @@ export default function MiniLocator({
     places,
     fitPlacesToMap = true,
 	controlPosition,
+	mapPadding,
 }: MiniLocatorProps) {
 	const appState = useRef(AppState.currentState);
 	const dispatch = useDispatch();
-	const initialDelta = 0.0025;
+	const initialDelta = 0.05;
 	const [track, setTrack] = useState(true);
 	const [region, setRegion] = useState<Region | null>(null);
 	const [centerCoords, setCenterCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -98,6 +100,11 @@ export default function MiniLocator({
 			title: initialPlaceName || 'Initial location',
 		};
 	}, [initialLat, initialLng, initialPlaceName]);
+
+	const resolvedMapPadding: EdgePadding = useMemo(
+		() => ({ top: 0, right: 0, bottom: 150, left: 0, ...mapPadding }),
+		[mapPadding],
+	);
 
 	useEffect(() => {
 		setLocalPlaces(places ?? []);
@@ -493,13 +500,16 @@ export default function MiniLocator({
                                     style={styles.map}
                                     initialRegion={region}
                                     mapType={mapType || 'none'}
-                                    showsTraffic={true}
+                                    showsTraffic={false}
                                     loadingEnabled={true}
+									liteMode={Platform.OS === 'android'}
                                     onLayout={(e) => setMapLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                                     onRegionChange={handleRegionChange}
                                     onRegionChangeComplete={handleRegionChangeComplete}
 									onRegionChangeStart={() => setHideSonar(true)}
 									onMapReady={handleMapReady}
+											mapPadding={resolvedMapPadding}
+									showsPointsOfInterest={false}
                                 >
 									{placeCoords.map((coord, index) => (
 										<Marker
@@ -510,7 +520,7 @@ export default function MiniLocator({
 											anchor={{ x: 0.5, y: 0.9 }}
 											renderToHardwareTextureAndroid={true}
 										>
-											<View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+											<View style={{ width: 40, height: 40, position: 'relative', top: Platform.OS === 'ios' ? -12 : 0, alignItems: 'center', justifyContent: 'center' }}>
 												{customMarker(coord, index, placeCoords.length)}
 											</View>
 											<Callout tooltip>

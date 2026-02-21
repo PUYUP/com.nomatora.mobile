@@ -1,8 +1,9 @@
 import MiniLocator from "@/components/partials/mini-locator";
 import { getCurrentLocation } from "@/libs/location";
 import { CoordsData, PlaceData } from "@/models/location";
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Home() {
@@ -86,8 +87,8 @@ export default function Home() {
     }, []);
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'green' }} edges={['bottom']}>
-            <View style={{ width: '100%', height: '80%', backgroundColor: 'blue' }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
+            <View style={{ width: '100%', height: '100%' }}>
                 <MiniLocator
                     requestId="expense-location"
                     purpose="expense"
@@ -98,11 +99,39 @@ export default function Home() {
                     places={places}
                     mapType={'terrain'}
                     fitPlacesToMap={false}
-                    controlPosition={{ top: insets.top, right: 16 }}
+                    controlPosition={{ top: insets.top + 16, right: 16 }}
+                    mapPadding={{ bottom: 350, top: 0, right: 0, left: 0 }}
                 />
             </View>
 
-            <Text>A</Text>
+            <LinearGradient
+                // Background Linear Gradient
+                colors={['rgba(0,0,0,0.4)', 'transparent']}
+                style={styles.backgroundTop}
+            />
+
+            <LinearGradient
+                // Background Linear Gradient
+                colors={['transparent', 'rgba(0,0,0,0.6)']}
+                style={styles.backgroundBottom}
+            />
         </SafeAreaView>
     );
 }
+
+const styles = StyleSheet.create({
+    backgroundBottom: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: '40%',
+    },
+    backgroundTop: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        height: '10%',
+    },
+});
