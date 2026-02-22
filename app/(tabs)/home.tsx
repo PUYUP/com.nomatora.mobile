@@ -86,8 +86,8 @@ export default function Home() {
     }, []);
 
     return (
-        <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
-            <View style={{ width: '100%', height: '100%' }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['left', 'right']}>
+            <View style={{ flex: 1 }}>
                 {currentLocation && (
                     <LocatorMapbox
                         requestId="expense-location"
@@ -101,22 +101,11 @@ export default function Home() {
                         fitPlacesToMap={false}
                         controlPosition={{ top: insets.top + 16, right: 16 }}
                         mapPadding={{ bottom: 0, top: 0, right: 0, left: 0 }}
-                        isSelecting={false} // user dragging the map to select location
+                        isSelecting={false}
+                        radiusCircle={{}}
                     />
                 )}
             </View>
-
-            {/* <LinearGradient
-                // Background Linear Gradient
-                colors={['rgba(0,0,0,0.4)', 'transparent']}
-                style={styles.backgroundTop}
-            />
-
-            <LinearGradient
-                // Background Linear Gradient
-                colors={['transparent', 'rgba(0,0,0,0.6)']}
-                style={styles.backgroundBottom}
-            /> */}
         </SafeAreaView>
     );
 }

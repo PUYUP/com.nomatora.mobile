@@ -1,15 +1,10 @@
 import AnimatedOval from '@/components/ui/animated-oval';
 import MapMarker from '@/components/ui/mappin';
-import {
-	getCurrentLocation,
-	isLocationServiceEnabled,
-	openLocationSettings,
-	reverseGeocodeLocation
-} from '@/libs/location';
+import { getCurrentLocation, reverseGeocodeLocation } from '@/libs/location';
 import { PlaceData } from '@/models/location';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Mapbox, { Camera, LineLayer, MapView as MapboxMapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
-import type { Feature, Point } from 'geojson';
+import Mapbox, { Camera, FillLayer, LineLayer, MapView as MapboxMapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
+import type { Feature, GeoJsonProperties, Point, Polygon } from 'geojson';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -24,7 +19,6 @@ import {
 	View,
 	ViewStyle
 } from 'react-native';
-import { Float } from 'react-native/Libraries/Types/CodegenTypes';
 import { useDispatch } from 'react-redux';
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN || '');
@@ -35,6 +29,21 @@ Mapbox.setTelemetryEnabled(false);
 type MapPadding = { top?: number; right?: number; bottom?: number; left?: number };
 
 type ConfirmPayload = { latitude: string; longitude: string; placeName: string; purpose?: string };
+
+type RadiusCircleOptions = {
+	/** Radius in meters. Defaults to 500. */
+	radiusMeters?: number;
+	/** Fill colour (CSS colour string). Defaults to '#1382fe'. */
+	fillColor?: string;
+	/** Fill opacity 0–1. Defaults to 0.12. */
+	fillOpacity?: number;
+	/** Border/stroke colour. Defaults to '#1382fe'. */
+	strokeColor?: string;
+	/** Border/stroke width in pixels. Defaults to 2. */
+	strokeWidth?: number;
+	/** Border opacity 0–1. Defaults to 0.8. */
+	strokeOpacity?: number;
+};
 
 type ComponentProps = {
 	requestId: string;
@@ -50,6 +59,8 @@ type ComponentProps = {
 	controlPosition?: { top?: number; right?: number; bottom?: number; left?: number };
 	mapPadding?: MapPadding;
 	isSelecting?: boolean;
+	/** When provided, renders a radius circle around the current user location. */
+	radiusCircle?: RadiusCircleOptions | false;
 };
 
 type PlaceCoord = { latitude: number; longitude: number; title: string };
@@ -61,6 +72,9 @@ const MIN_ZOOM = 2;
 const MAX_ZOOM = 20;
 const EARTH_RADIUS_KM = 6371;
 
+/** Number of points used to approximate the circle polygon. Higher = smoother. */
+const CIRCLE_STEPS = 64;
+
 const MAPBOX_STYLE_URL: Record<NonNullable<ComponentProps['mapType']>, string> = {
 	standard: Mapbox.StyleURL.Street,
 	satellite: Mapbox.StyleURL.Satellite,
@@ -70,6 +84,64 @@ const MAPBOX_STYLE_URL: Record<NonNullable<ComponentProps['mapType']>, string> =
 };
 
 const DEFAULT_MAP_PADDING: Required<MapPadding> = { top: 0, right: 0, bottom: 150, left: 0 };
+
+const DEFAULT_RADIUS_OPTIONS: Required<RadiusCircleOptions> = {
+	radiusMeters: 500,
+	fillColor: '#1382fe',
+	fillOpacity: 0.12,
+	strokeColor: '#1382fe',
+	strokeWidth: 2,
+	strokeOpacity: 0.8,
+};
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
+/**
+ * Builds a GeoJSON Polygon that approximates a geodesic circle.
+ *
+ * Uses the Haversine-based offset formula so the circle is geographically
+ * accurate (i.e. it stays circular at any latitude and zoom level, unlike
+ * a plain CSS/View circle overlay which would distort).
+ *
+ * @param centerLat  Center latitude in decimal degrees
+ * @param centerLng  Center longitude in decimal degrees
+ * @param radiusMeters  Radius in metres
+ * @param steps  Number of polygon vertices (more = smoother)
+ */
+function buildCirclePolygon(
+	centerLat: number,
+	centerLng: number,
+	radiusMeters: number,
+	steps: number = CIRCLE_STEPS,
+): Feature<Polygon, GeoJsonProperties> {
+	const EARTH_RADIUS_M = 6_371_000;
+	const latRad = (centerLat * Math.PI) / 180;
+	const angularRadius = radiusMeters / EARTH_RADIUS_M;
+
+	const coordinates: [number, number][] = [];
+
+	for (let i = 0; i <= steps; i++) {
+		const bearing = (2 * Math.PI * i) / steps; // 0 → 2π
+		const pointLat = Math.asin(
+			Math.sin(latRad) * Math.cos(angularRadius) +
+				Math.cos(latRad) * Math.sin(angularRadius) * Math.cos(bearing),
+		);
+		const pointLng =
+			(centerLng * Math.PI) / 180 +
+			Math.atan2(
+				Math.sin(bearing) * Math.sin(angularRadius) * Math.cos(latRad),
+				Math.cos(angularRadius) - Math.sin(latRad) * Math.sin(pointLat),
+			);
+
+		coordinates.push([(pointLng * 180) / Math.PI, (pointLat * 180) / Math.PI]);
+	}
+
+	return {
+		type: 'Feature',
+		geometry: { type: 'Polygon', coordinates: [coordinates] },
+		properties: {},
+	};
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -116,7 +188,7 @@ export const CustomMarker = ({
 		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]} >
 			{!(isLast && isDragMarkerVisible) && <Image source={asset} style={{ width: 40, height: 40 }} />}
 			{isLast && !isDragMarkerVisible && (
-				<View style={styles.hereNowGroup} >
+				<View style={[styles.hereNowGroup, { transform: [{ translateX: Platform.OS === 'ios' ? -40 : -42 }] }]} >
 					<Animated.View style={{ transform: [{ translateY: hereNowTranslate }] }}>
 						<View style={styles.hereNowBadge}>
 							<TouchableOpacity onPress={() => onChangeLocation(coord)}>
@@ -131,53 +203,6 @@ export const CustomMarker = ({
 					</Animated.View>
 				</View>
 			)}
-		</View>
-	);
-};
-
-type PermissionBlockProps = {
-	isRequestingPermission: boolean;
-	permissionError: string | null;
-	isLocationNotEnabled: boolean;
-	onPrimaryAction: () => void;
-};
-
-const PermissionBlock = ({
-	isRequestingPermission,
-	permissionError,
-	isLocationNotEnabled,
-	onPrimaryAction,
-}: PermissionBlockProps) => {
-	const isPending = isRequestingPermission && !permissionError;
-	const title = isPending
-		? 'Requesting location permission…'
-		: isLocationNotEnabled
-			? 'Location services disabled'
-			: 'Location permission needed';
-	const message =
-		permissionError ??
-		(isLocationNotEnabled
-			? 'Please enable location services to continue.'
-			: 'Please enable location access in Settings to select a location.');
-	const buttonLabel = isLocationNotEnabled ? 'Open Settings' : 'Refresh';
-
-	return (
-		<View style={styles.permissionBlock}>
-			{isPending ? (
-				<ActivityIndicator size="large" />
-			) : (
-				<MaterialCommunityIcons name="map-marker-off" size={40} color="#6b7280" />
-			)}
-			<Text style={styles.permissionTitle}>{title}</Text>
-			<Text style={styles.permissionMessage}>{message}</Text>
-			{!isRequestingPermission && permissionError ? (
-				<TouchableOpacity
-					style={[styles.primaryButton, { flex: 0, paddingHorizontal: 30, borderRadius: 50 }]}
-					onPress={onPrimaryAction}
-				>
-					<Text style={styles.primaryButtonText}>{buttonLabel}</Text>
-				</TouchableOpacity>
-			) : null}
 		</View>
 	);
 };
@@ -198,7 +223,9 @@ export default function LocatorMapbox({
 	controlPosition,
 	mapPadding,
 	isSelecting = false,
-}: ComponentProps) {
+	radiusCircle,
+	onUserLocationChange,
+}: ComponentProps & { onUserLocationChange?: (location: { latitude: number; longitude: number } | null) => void }) {
 	const dispatch = useDispatch();
 
 	// ─── Props modifiers / derived values ─────────────────────────────────────
@@ -241,15 +268,33 @@ export default function LocatorMapbox({
 	const [cameraCenter, setCameraCenter] = useState<{ latitude: number; longitude: number } | null>(null);
 	const [cameraZoom, setCameraZoom] = useState<number>(DEFAULT_ZOOM);
 	const [isLoading, setIsLoading] = useState(false);
-	const [permissionError, setPermissionError] = useState<string | null>(null);
-	const [isRequestingPermission, setIsRequestingPermission] = useState(true);
-	const [isLocationNotEnabled, setIsLocationNotEnabled] = useState(true);
 	const [mapLayout, setMapLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 	const [localPlaces, setLocalPlaces] = useState<PlaceData[]>(places ?? []);
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
 	const [isDragMarkerVisible, setIsDragMarkerVisible] = useState(false);
 	const [isStarting, setIsStarting] = useState(false);
+
+	/**
+	 * The live GPS position of the device — used exclusively as the circle center.
+	 * Separate from cameraCenter so the circle follows the real user position even
+	 * when the camera has been panned elsewhere (e.g. in isSelecting mode).
+	 */
+	const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(() => {
+		const lat = initialLat !== undefined ? Number(initialLat) : undefined;
+		const lng = initialLng !== undefined ? Number(initialLng) : undefined;
+		if (typeof lat === 'number' && !Number.isNaN(lat) && typeof lng === 'number' && !Number.isNaN(lng)) {
+			return { latitude: lat, longitude: lng };
+		}
+		return null;
+	});
+
+	// Call onUserLocationChange whenever userLocation changes
+	useEffect(() => {
+		if (onUserLocationChange) {
+			onUserLocationChange(userLocation);
+		}
+	}, [userLocation, onUserLocationChange]);
 
 	// ─── Derived / memoized values ────────────────────────────────────────────
 
@@ -288,6 +333,30 @@ export default function LocatorMapbox({
 		if (!hasUserRecentered && initialCoord) mapped.push(initialCoord);
 		return mapped;
 	}, [localPlaces, initialCoord, hasUserRecentered]);
+
+	/**
+	 * Resolved radius circle options — merges caller's overrides with defaults.
+	 * Returns null when radiusCircle === false (feature disabled).
+	 */
+	const resolvedRadiusCircle = useMemo<Required<RadiusCircleOptions> | null>(() => {
+		if (radiusCircle === false || radiusCircle === undefined) return null;
+		return { ...DEFAULT_RADIUS_OPTIONS, ...radiusCircle };
+	}, [radiusCircle]);
+
+	/**
+	 * GeoJSON polygon for the radius circle.
+	 * Recomputed only when the user location or radius options change.
+	 * Rendered as a FillLayer (filled area) + LineLayer (border) inside Mapbox,
+	 * which ensures the circle scales and distorts correctly with the map projection.
+	 */
+	const radiusCircleGeoJSON = useMemo<Feature<Polygon, GeoJsonProperties> | null>(() => {
+		if (!resolvedRadiusCircle || !userLocation) return null;
+		return buildCirclePolygon(
+			userLocation.latitude,
+			userLocation.longitude,
+			resolvedRadiusCircle.radiusMeters,
+		);
+	}, [resolvedRadiusCircle, userLocation]);
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -392,20 +461,6 @@ export default function LocatorMapbox({
 
 	const initializeLocationFlow = useCallback(async () => {
 		setIsLoading(true);
-		setPermissionError(null);
-		setIsRequestingPermission(true);
-
-		const locationEnabled = await isLocationServiceEnabled();
-		if (!isMounted.current) return;
-
-		setIsLocationNotEnabled(!locationEnabled);
-
-		if (!locationEnabled) {
-			setPermissionError('Location services are disabled. Enable location services then press Refresh.');
-			setIsRequestingPermission(false);
-			setIsLoading(false);
-			return;
-		}
 
 		// 1. Use provided initial coordinates if valid.
 		const parsedLat = initialLat !== undefined ? Number(initialLat) : NaN;
@@ -413,7 +468,6 @@ export default function LocatorMapbox({
 		if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
 			applyCamera({ latitude: parsedLat, longitude: parsedLng });
 			broadcastLocation(parsedLat, parsedLng, initialPlaceName ?? '');
-			setIsRequestingPermission(false);
 			setIsLoading(false);
 			return;
 		}
@@ -432,14 +486,9 @@ export default function LocatorMapbox({
 			if (!isMounted.current) return;
 
 			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
-			setIsRequestingPermission(false);
 		} else {
-			setPermissionError(
-				location.error.message
-					? `${location.error.message}. Press button below to grant permission.`
-					: 'Location permission is required.',
-			);
-			setIsRequestingPermission(false);
+			// Fallback to a neutral center so the map is usable even without location.
+			applyCamera({ latitude: 0, longitude: 0 });
 		}
 
 		setIsLoading(false);
@@ -472,10 +521,7 @@ export default function LocatorMapbox({
 	useEffect(() => {
 		const subscription = AppState.addEventListener('change', async (nextAppState) => {
 			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-				const locationEnabled = await isLocationServiceEnabled();
-				if (!isMounted.current) return;
-				setIsLocationNotEnabled(!locationEnabled);
-				if (locationEnabled) initializeLocationFlow();
+				initializeLocationFlow();
 			}
 			appState.current = nextAppState;
 		});
@@ -500,13 +546,13 @@ export default function LocatorMapbox({
 
 	// ─── Map event handlers ───────────────────────────────────────────────────
 
-	const getSelectionRadiusFromCurrentLocation = () => {
+	const getSelectionRadiusFromCurrentLocation = (lat: number, lng: number) => {
 		if (!initialLat && !initialLng) return null;
 		const current = lastCameraRef.current;
 		if (!current) return null;
-		const { latitude, longitude } = current.center;
+		const { latitude, longitude } = userLocation ?? current.center;
 		// Approximate radius as distance from center to top edge of map view.
-		const radius = calculateDistance(initialLat as Float, initialLng as Float, latitude, longitude);
+		const radius = calculateDistance(latitude, longitude, lat, lng);
 		return radius;
 	}
 
@@ -520,7 +566,7 @@ export default function LocatorMapbox({
 			}, 5);
 
 			const [longitude, latitude] = feature.geometry.coordinates;
-			const name = `Selected location${getSelectionRadiusFromCurrentLocation() ? ` (±${Math.round(getSelectionRadiusFromCurrentLocation()!)}m)` : ''}`;
+			const name = `Selected location${getSelectionRadiusFromCurrentLocation(latitude, longitude) ? ` (±${Math.round(getSelectionRadiusFromCurrentLocation(latitude, longitude)!)}m)` : ''}`;
 			setLocalPlaces((prev) => {
 				prev.pop(); // remove previous "Selected location" if exists
 				return [...prev, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
@@ -546,6 +592,23 @@ export default function LocatorMapbox({
 				const geocoded = await reverseGeocodeLocation(latitude, longitude);
 				const name = geocoded.ok ? geocoded.data.name : 'Selected location';
 				broadcastLocation(latitude, longitude, name);
+
+				// calulate radius from current location to selected location and update localPlaces to show it in the badge
+				const radius = getSelectionRadiusFromCurrentLocation(latitude, longitude);
+				const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
+
+				if (resolvedRadiusCircle && radius && userLocation) {
+					if (radius > resolvedRadiusCircle.radiusMeters) {
+						setLocalPlaces((prev) => {
+							prev.pop(); // remove previous set from handleRegionIsChanging
+							return [...prev, { properties: { name }, geometry: { coordinate: { latitude: userLocation?.latitude, longitude: userLocation?.longitude } } }];
+						});
+
+						applyCamera({ latitude: userLocation.latitude, longitude: userLocation.longitude }, cameraZoom, 300);
+						setIsDragMarkerVisible(true); // Hide the "Selected location" marker if selection is out of radius.
+						setHasUserRecentered(true);	
+					}
+				}
 			}
 		}
 	});
@@ -585,30 +648,23 @@ export default function LocatorMapbox({
 			return [...deduped, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
 		});
 		setHasUserRecentered(true);
-		applyCamera({ latitude, longitude }, DEFAULT_ZOOM, 0);
+		applyCamera({ latitude, longitude }, DEFAULT_ZOOM, 250);
 		broadcastLocation(latitude, longitude, name);
 		setIsRecentering(false);
 
+		// disable selection mode and hide.
 		setOnSelecting(false);
 		setIsDragMarkerVisible(false); // Hide the "Selected location" marker when recentering to user location.
-		
+    
+		// update userLocation state to move radius circle
+		setUserLocation({ latitude, longitude });
 	}, [applyCamera, broadcastLocation]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
 
-	const showPermissionScreen = isRequestingPermission || !!permissionError || isLocationNotEnabled;
-
 	return (
 		<View style={[styles.container, containerStyle]}>
-			{showPermissionScreen ? (
-				<PermissionBlock
-					isRequestingPermission={isRequestingPermission}
-					permissionError={permissionError}
-					isLocationNotEnabled={isLocationNotEnabled}
-					onPrimaryAction={isLocationNotEnabled ? openLocationSettings : initializeLocationFlow}
-				/>
-			) : (
-				<View style={styles.page}>
+			<View style={styles.page}>
 					<View style={styles.mapCard}>
 						{/*
 						 * MapboxMapView is ALWAYS mounted — never conditionally unmounted.
@@ -651,6 +707,46 @@ export default function LocatorMapbox({
 										animationDuration={0}
 										padding={mapboxPadding}
 									/>
+								)}
+
+								{/*
+								 * ─── Radius circle ────────────────────────────────────────────────
+								 *
+								 * Rendered as a native Mapbox FillLayer + LineLayer on top of a
+								 * ShapeSource. This is the correct approach because:
+								 *
+								 *  1. Geographic accuracy — the polygon is built using the Haversine
+								 *     formula, so it remains a true circle regardless of latitude or
+								 *     zoom level (a plain CSS/View circle would squash/stretch).
+								 *
+								 *  2. Proper z-ordering — it renders below markers and the route line
+								 *     because it is declared first in JSX (Mapbox respects source order).
+								 *
+								 *  3. Performance — Mapbox renders it on the GL thread, not the JS
+								 *     thread, so there is zero layout/render overhead per frame.
+								 *
+								 * Layer IDs use a unique prefix to avoid collisions with route layers.
+								 */}
+								{resolvedRadiusCircle && radiusCircleGeoJSON && onSelecting && (
+									<ShapeSource id="radius-circle-source" shape={radiusCircleGeoJSON}>
+										{/* Filled area */}
+										<FillLayer
+											id="radius-circle-fill"
+											style={{
+												fillColor: resolvedRadiusCircle.fillColor,
+												fillOpacity: resolvedRadiusCircle.fillOpacity,
+											}}
+										/>
+										{/* Stroke / border */}
+										<LineLayer
+											id="radius-circle-stroke"
+											style={{
+												lineColor: resolvedRadiusCircle.strokeColor,
+												lineWidth: resolvedRadiusCircle.strokeWidth,
+												lineOpacity: resolvedRadiusCircle.strokeOpacity,
+											}}
+										/>
+									</ShapeSource>
 								)}
 
 								{placeCoords.map((coord, index) => (
@@ -742,8 +838,7 @@ export default function LocatorMapbox({
 						</View>
 					</View>
 				</View>
-			)}
-		</View>
+			</View>
 	);
 }
 
@@ -810,36 +905,6 @@ const styles = StyleSheet.create({
 		elevation: 4,
 	},
 	mutedText: { opacity: 0.7, fontSize: 12 },
-	permissionBlock: {
-		flex: 1,
-		alignItems: 'center',
-		justifyContent: 'center',
-		gap: 12,
-		paddingHorizontal: 36,
-	},
-	permissionTitle: {
-		fontSize: 18,
-		fontWeight: '700',
-		color: '#111827',
-	},
-	permissionMessage: {
-		textAlign: 'center',
-		color: '#4b5563',
-		lineHeight: 20,
-	},
-	primaryButton: {
-		flex: 1,
-		backgroundColor: '#111',
-		paddingVertical: 14,
-		paddingHorizontal: 16,
-		borderRadius: 12,
-		alignItems: 'center',
-	},
-	primaryButtonText: {
-		color: 'white',
-		fontSize: 16,
-		fontWeight: '700',
-	},
 	customMarker: {
 		alignItems: 'center',
 		justifyContent: 'center',
@@ -887,7 +952,7 @@ const styles = StyleSheet.create({
 		borderTopColor: 'white',
 	},
 	changeLocationButton: {
-		backgroundColor: '#90ee90',
+		backgroundColor: '#9acd32',
 		height: 32,
 		paddingHorizontal: 8,
 		borderRadius: 16,
