@@ -6,6 +6,7 @@ import { HapticTab } from '@/components/haptic-tab';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const styles = StyleSheet.create({
   tabItem: {
@@ -32,7 +33,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '700',
     textAlign: 'center',
     borderBottomLeftRadius: 22,
     borderBottomRightRadius: 22,
@@ -68,15 +68,19 @@ export default function TabLayout() {
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           elevation: 0,
-          height: 72,
-          paddingHorizontal: 8,
+          height: 106,
+          paddingTop: 24,
         },
         tabBarItemStyle: {
           flex: 1,
           backgroundColor: 'transparent',
-          marginHorizontal: 8,
         },
-        tabBarBackground: () => null,
+        tabBarBackground: () => (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.25)']}
+            style={{ height: 106 }}
+          />
+        ),
       }}>
       <Tabs.Screen
         name="index"
