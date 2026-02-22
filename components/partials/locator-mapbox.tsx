@@ -44,7 +44,6 @@ type ConfirmPayload = {
 };
 
 type RadiusCircleOptions = {
-	/** Radius in meters. Defaults to 500. */
 	radiusMeters?: number;
 	fillColor?: string;
 	fillOpacity?: number;
@@ -72,6 +71,7 @@ type ComponentProps = {
 };
 
 type PlaceCoord = { latitude: number; longitude: number; title: string };
+type LatLng = { latitude: number; longitude: number };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ function buildCirclePolygon(
 function parseLatLng(
 	lat: string | number | undefined,
 	lng: string | number | undefined,
-): { latitude: number; longitude: number } | null {
+): LatLng | null {
 	const parsedLat = lat !== undefined ? Number(lat) : NaN;
 	const parsedLng = lng !== undefined ? Number(lng) : NaN;
 	if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
@@ -159,9 +159,21 @@ function parseLatLng(
 	return null;
 }
 
+/** Replaces the last element of an array immutably. */
+function replaceLast<T>(arr: T[], item: T): T[] {
+	return [...arr.slice(0, -1), item];
+}
+
+/** Builds a PlaceData-shaped object for a selected/current location. */
+function makeLocationPlace(name: string, coords: LatLng): PlaceData {
+	return {
+		properties: { name },
+		geometry: { coordinate: { latitude: coords.latitude, longitude: coords.longitude } },
+	};
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-/** Manages the animated pin scaling/translation during drag. */
 function usePinAnimation() {
 	const pinScale = useRef(new Animated.Value(1)).current;
 	const pinTranslate = useRef(new Animated.Value(0)).current;
@@ -219,24 +231,27 @@ export const CustomMarker = ({
 	}, [hereNowTranslate, isLast]);
 
 	const markerStyle = isFirst ? styles.startMarker : isLast ? styles.endMarker : null;
-	const showImage = !(isLast && isDragMarkerVisible);
-	const showBadge = isLast && !isDragMarkerVisible;
 
 	return (
 		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]}>
-			{showImage && <Image source={asset} style={{ width: 40, height: 40 }} />}
-			{showBadge && (
+			{/* Hide image only when it's the last marker AND drag pin is active */}
+			{!(isLast && isDragMarkerVisible) && (
+				<Image source={asset} style={{ width: 40, height: 40 }} />
+			)}
+
+			{/* "Change" badge — only on last marker when drag pin is NOT active */}
+			{isLast && !isDragMarkerVisible && (
 				<View
 					style={[
 						styles.hereNowGroup,
-						{ transform: [{ translateX: Platform.OS === 'ios' ? -48 : -50 }] },
+						{ transform: [{ translateX: Platform.OS === 'ios' ? -50 : -52 }] },
 					]}
 				>
 					<Animated.View style={{ transform: [{ translateY: hereNowTranslate }] }}>
 						<View style={styles.hereNowBadge}>
 							<TouchableOpacity onPress={() => onChangeLocation(coord)}>
 								<View style={styles.changeLocationButton}>
-									<MaterialCommunityIcons name="map-marker-radius" size={20} color="#333" />
+									<MaterialCommunityIcons name="map-marker-radius" size={18} color="#333" />
 									<Text style={{ fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
 										Change
 									</Text>
@@ -278,17 +293,17 @@ export default function LocatorMapbox({
 	// ─── Refs ─────────────────────────────────────────────────────────────────
 	const isMounted = useRef(true);
 	const appState = useRef(AppState.currentState);
-	const draggingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const mapRef = useRef<Mapbox.MapView | null>(null);
+	// Ref name reflects true purpose: debounce timer for revealing the drag pin
+	const revealPinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const cameraRef = useRef<Mapbox.Camera | null>(null);
-	const lastCameraRef = useRef<{ center: { latitude: number; longitude: number }; zoom: number } | null>(null);
+	const lastCameraRef = useRef<{ center: LatLng; zoom: number } | null>(null);
 	const isProgrammaticMoveRef = useRef(false);
 	const ignoreRegionEventsUntilRef = useRef(0);
 	const isDraggingRef = useRef(false);
 
 	// ─── State ────────────────────────────────────────────────────────────────
 	const [onSelecting, setOnSelecting] = useState(isSelecting);
-	const [cameraCenter, setCameraCenter] = useState<{ latitude: number; longitude: number } | null>(null);
+	const [cameraCenter, setCameraCenter] = useState<LatLng | null>(null);
 	const [cameraZoom, setCameraZoom] = useState(DEFAULT_ZOOM);
 	const [isLoading, setIsLoading] = useState(false);
 	const [mapLayout, setMapLayout] = useState({ width: 0, height: 0 });
@@ -297,7 +312,7 @@ export default function LocatorMapbox({
 	const [isRecentering, setIsRecentering] = useState(false);
 	const [isDragMarkerVisible, setIsDragMarkerVisible] = useState(false);
 	const [isStarting, setIsStarting] = useState(false);
-	const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
+	const [userLocation, setUserLocation] = useState<LatLng | null>(
 		() => parseLatLng(initialLat, initialLng),
 	);
 
@@ -306,7 +321,10 @@ export default function LocatorMapbox({
 		isMounted.current = true;
 		return () => {
 			isMounted.current = false;
-			if (draggingTimerRef.current) clearTimeout(draggingTimerRef.current);
+			if (revealPinTimerRef.current) {
+				clearTimeout(revealPinTimerRef.current);
+				revealPinTimerRef.current = null;
+			}
 			setOnSelecting(false);
 			setIsDragMarkerVisible(false);
 		};
@@ -333,10 +351,7 @@ export default function LocatorMapbox({
 		[mapPadding],
 	);
 
-	const mapStyleUrl = useMemo(
-		() => MAPBOX_STYLE_URL[mapType ?? 'standard'],
-		[mapType],
-	);
+	const mapStyleUrl = useMemo(() => MAPBOX_STYLE_URL[mapType ?? 'standard'], [mapType]);
 
 	const placeCoords = useMemo<PlaceCoord[]>(() => {
 		const mapped = (localPlaces ?? []).map<PlaceCoord>((p) => ({
@@ -355,21 +370,13 @@ export default function LocatorMapbox({
 
 	const radiusCircleGeoJSON = useMemo<Feature<Polygon, GeoJsonProperties> | null>(() => {
 		if (!resolvedRadiusCircle || !userLocation) return null;
-		return buildCirclePolygon(
-			userLocation.latitude,
-			userLocation.longitude,
-			resolvedRadiusCircle.radiusMeters,
-		);
+		return buildCirclePolygon(userLocation.latitude, userLocation.longitude, resolvedRadiusCircle.radiusMeters);
 	}, [resolvedRadiusCircle, userLocation]);
 
 	// ─── Core helpers ─────────────────────────────────────────────────────────
 
 	const applyCamera = useCallback(
-		(
-			center: { latitude: number; longitude: number },
-			zoom = DEFAULT_ZOOM,
-			animationDuration = 0,
-		) => {
+		(center: LatLng, zoom = DEFAULT_ZOOM, animationDuration = 0) => {
 			setCameraCenter(center);
 			setCameraZoom(zoom);
 			lastCameraRef.current = { center, zoom };
@@ -408,7 +415,6 @@ export default function LocatorMapbox({
 		lastCameraRef.current = { ...current, zoom: nextZoom };
 	}, []);
 
-	/** Returns the distance (m) from the user/initial location to the given map coords. */
 	const getSelectionRadius = useCallback(
 		(lat: number, lng: number): number | null => {
 			if (!initialLat && !initialLng) return null;
@@ -417,6 +423,20 @@ export default function LocatorMapbox({
 			return calculateDistance(origin.latitude, origin.longitude, lat, lng);
 		},
 		[initialLat, initialLng, userLocation],
+	);
+
+	/**
+	 * Updates the last entry in localPlaces with a "Selected location" pin.
+	 * Pass `snapTo` to override the coordinate (used when snapping back out-of-bounds).
+	 */
+	const updateSelectionPlace = useCallback(
+		(latitude: number, longitude: number, radius: number | null, snapTo?: LatLng) => {
+			const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
+			const coords = snapTo ?? { latitude, longitude };
+			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace(`Selected location${radiusText}`, coords)));
+			setHasUserRecentered(true);
+		},
+		[],
 	);
 
 	// ─── Location flow ────────────────────────────────────────────────────────
@@ -445,7 +465,8 @@ export default function LocatorMapbox({
 			applyCamera({ latitude: 0, longitude: 0 });
 		}
 
-		setIsLoading(false);
+		// FIX #6: guard setIsLoading against unmounted component
+		if (isMounted.current) setIsLoading(false);
 	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName]);
 
 	// ─── Effects ──────────────────────────────────────────────────────────────
@@ -494,29 +515,17 @@ export default function LocatorMapbox({
 	const handleRegionIsChanging = useCallback(
 		(feature: Feature<Point>) => {
 			if (onSelecting) {
-				if (draggingTimerRef.current) clearTimeout(draggingTimerRef.current);
-				draggingTimerRef.current = setTimeout(() => {
-					if (!isDragMarkerVisible) setIsDragMarkerVisible(true);
-					if (isStarting) setIsStarting(false);
-					draggingTimerRef.current = null;
+				// FIX #1: setters are idempotent — no need to read state values in closure,
+				// which eliminates isDragMarkerVisible + isStarting from the dep array.
+				if (revealPinTimerRef.current) clearTimeout(revealPinTimerRef.current);
+				revealPinTimerRef.current = setTimeout(() => {
+					setIsDragMarkerVisible(true);
+					setIsStarting(false);
+					revealPinTimerRef.current = null;
 				}, 100);
 
 				const [longitude, latitude] = feature.geometry.coordinates;
-				const radius = getSelectionRadius(latitude, longitude);
-				const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
-
-				setLocalPlaces((prev) => {
-					const next = [...prev];
-					next.pop();
-					return [
-						...next,
-						{
-							properties: { name: `Selected location${radiusText}` },
-							geometry: { coordinate: { latitude, longitude } },
-						},
-					];
-				});
-				setHasUserRecentered(true);
+				updateSelectionPlace(latitude, longitude, getSelectionRadius(latitude, longitude));
 			}
 
 			if (!isDraggingRef.current) {
@@ -524,91 +533,80 @@ export default function LocatorMapbox({
 				animatePin(true);
 			}
 		},
-		[onSelecting, getSelectionRadius, animatePin],
+		// FIX #1: isDragMarkerVisible and isStarting removed — setters are always stable
+		[onSelecting, getSelectionRadius, updateSelectionPlace, animatePin],
 	);
 
 	const handleRegionDidChange = useCallback(
 		async (feature: Feature<Point>) => {
-			const isUserInteraction = feature.properties?.isUserInteraction;
+			// Consume the drag flag and reset pin animation
 			const wasUserDrag = isDraggingRef.current;
 			if (wasUserDrag) {
 				isDraggingRef.current = false;
 				animatePin(false);
 			}
 
-			if ((wasUserDrag || isUserInteraction) && onSelecting && !isRecentering) {
-				const [longitude, latitude] = feature.geometry.coordinates;
-				const radius = getSelectionRadius(latitude, longitude);
-				const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
+			// Clear any pending reveal-pin debounce — drag is fully done
+			if (revealPinTimerRef.current) {
+				clearTimeout(revealPinTimerRef.current);
+				revealPinTimerRef.current = null;
+			}
 
-				if (resolvedRadiusCircle && radius && userLocation) {
-					if (radius > resolvedRadiusCircle.radiusMeters) {
-						// Out of bounds — snap back to user location
-						setLocalPlaces((prev) => {
-							const next = [...prev];
-							next.pop();
-							return [
-								...next,
-								{
-									properties: { name: `Selected location${radiusText}` },
-									geometry: {
-										coordinate: {
-											latitude: userLocation.latitude,
-											longitude: userLocation.longitude,
-										},
-									},
-								},
-							];
-						});
-						cameraRef.current?.setCamera({
-							centerCoordinate: [userLocation.longitude, userLocation.latitude],
-							zoomLevel: 15.5,
-							animationDuration: 50,
-						});
-						setIsDragMarkerVisible(true);
-						setHasUserRecentered(true);
+			const isUserInteraction = feature.properties?.isUserInteraction;
+			// FIX #3: isRecentering is now in the dep array so this reads a fresh value
+			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecentering) return;
 
-						// Alerting too-far selection with a brief red flash of the radius circle
-						Alert.alert('Out of bounds', `Please select a location within ${Math.round(resolvedRadiusCircle.radiusMeters)} meters of your current location.`);
-					} else {
-						const geocoded = await reverseGeocodeLocation(latitude, longitude);
-						if (geocoded.ok) {
-							broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : 'Selected location');
-						}
-					}
-				}
+			const [longitude, latitude] = feature.geometry.coordinates;
+			const radius = getSelectionRadius(latitude, longitude);
 
-				if (draggingTimerRef.current) {
-					clearTimeout(draggingTimerRef.current);
-					draggingTimerRef.current = null;
+			if (resolvedRadiusCircle && radius != null && userLocation) {
+				if (radius > resolvedRadiusCircle.radiusMeters) {
+					// Out of bounds — snap camera back to user location
+					updateSelectionPlace(latitude, longitude, radius, userLocation);
+					cameraRef.current?.setCamera({
+						centerCoordinate: [userLocation.longitude, userLocation.latitude],
+						zoomLevel: 15.5,
+						animationDuration: 50,
+					});
+					setIsDragMarkerVisible(true);
+					Alert.alert(
+						'Out of bounds',
+						`Please select a location within ${Math.round(resolvedRadiusCircle.radiusMeters)} meters of your current location.`,
+					);
+				} else {
+					const geocoded = await reverseGeocodeLocation(latitude, longitude);
+					if (geocoded.ok) broadcastLocation(latitude, longitude, geocoded.data.name);
 				}
 			}
 		},
-		[onSelecting, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin],
+		// FIX #3: isRecentering added to dep array — was a stale closure bug
+		[onSelecting, isRecentering, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin, updateSelectionPlace],
 	);
 
 	// ─── Controls ─────────────────────────────────────────────────────────────
 
 	const handleChangeLocation = useCallback(() => {
-		// clear latest location from localPlaces
-		// then set again with current userLocation
 		if (userLocation) {
-			setLocalPlaces((prev) => {
-				const next = [...prev];
-				next.pop();
-				return [...next, { properties: { name: 'Selected location' }, geometry: { coordinate: { latitude: userLocation.latitude, longitude: userLocation.longitude } } }];
-			});
+			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', userLocation)));
 			setHasUserRecentered(true);
 		}
-
 		setIsStarting(true);
 		setOnSelecting(true);
 		setIsDragMarkerVisible(true);
-	
-		setTimeout(() => {
-			zoomBy(0.2, 50);
-		}, 50);
-	}, [zoomBy, setLocalPlaces, userLocation]);
+		setTimeout(() => zoomBy(0.2, 50), 50);
+	}, [zoomBy, userLocation]);
+
+	const handleCancelSelection = useCallback(() => {
+		setOnSelecting(false);
+		setIsDragMarkerVisible(false);
+		if (userLocation) {
+			// FIX #5: reset localPlaces last entry to a clean name (no stale radius text)
+			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Current location', userLocation)));
+			setHasUserRecentered(true);
+			applyCamera(userLocation, DEFAULT_ZOOM, 250);
+			broadcastLocation(userLocation.latitude, userLocation.longitude, 'Current location');
+		}
+	}, [userLocation, applyCamera, broadcastLocation]);
 
 	const recenterToUserLocation = useCallback(async () => {
 		setIsRecentering(true);
@@ -623,21 +621,17 @@ export default function LocatorMapbox({
 		const geocoded = await reverseGeocodeLocation(latitude, longitude);
 		if (!isMounted.current) return;
 		const name = geocoded.ok ? geocoded.data.name : 'Current location';
+		const coords = { latitude, longitude };
 
-		// Update the latest location in localPlaces so it doesn't show up as a duplicate when the user drags the pin
-		setLocalPlaces((prev) => {
-			const next = [...prev];
-			next.pop();
-			return [...next, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
-		});
+		setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace(name, coords)));
 		setHasUserRecentered(true);
-		applyCamera({ latitude, longitude }, DEFAULT_ZOOM, 250);
+		applyCamera(coords, DEFAULT_ZOOM, 250);
 		broadcastLocation(latitude, longitude, name);
-		setUserLocation({ latitude, longitude });
+		setUserLocation(coords);
 		setOnSelecting(false);
 		setIsDragMarkerVisible(false);
 		setIsRecentering(false);
-	}, [applyCamera, broadcastLocation, setLocalPlaces]);
+	}, [applyCamera, broadcastLocation]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
 
@@ -648,8 +642,11 @@ export default function LocatorMapbox({
 			<View style={styles.page}>
 				<View style={styles.mapCard}>
 					<View style={styles.mapWrapper}>
+						{/*
+						 * mapRef intentionally omitted — not needed for current functionality.
+						 * Re-add if getVisibleBounds() or queryRenderedFeatures() is required.
+						 */}
 						<MapboxMapView
-							ref={(ref) => { mapRef.current = ref; }}
 							style={styles.map}
 							styleURL={mapStyleUrl}
 							logoEnabled={false}
@@ -754,19 +751,8 @@ export default function LocatorMapbox({
 									</View>
 								</View>
 
-								{/* cancel selection button */}
-								<View style={ styles.cancelSelectionContainer}>
-									<TouchableOpacity
-										style={styles.cancelSelectionButton}
-										onPress={() => {
-											setOnSelecting(false);
-											setIsDragMarkerVisible(false);
-											if (userLocation) {
-												applyCamera(userLocation, DEFAULT_ZOOM, 250);
-												broadcastLocation(userLocation.latitude, userLocation.longitude, 'Selected location');
-											}
-										}}
-									>
+								<View style={styles.cancelSelectionContainer}>
+									<TouchableOpacity style={styles.cancelSelectionButton} onPress={handleCancelSelection}>
 										<MaterialCommunityIcons name="close-circle" size={20} color="#333" />
 										<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>
 											Cancel

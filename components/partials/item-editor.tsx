@@ -394,10 +394,10 @@ export function ItemEditor({
                                 autoFocus
                             />
                             <View style={styles.addCategoryActions}>
-                                <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton]} onPress={handleCancelCategory}>
+                                <TouchableOpacity style={[styles.secondaryButton, styles.modalActionButton, { flex: 1 }]} onPress={handleCancelCategory}>
                                     <Text style={styles.secondaryButtonText}>Cancel</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton]} onPress={saveCategoryHandler}>
+                                <TouchableOpacity style={[styles.primaryButton, styles.modalActionButton, { flex: 1 }]} onPress={saveCategoryHandler}>
                                     <Text style={styles.primaryButtonText}>Save</Text>
                                 </TouchableOpacity>
                             </View>
@@ -456,6 +456,7 @@ const styles = StyleSheet.create({
     },
     addCategoryActions: {
         flexDirection: "row",
+        justifyContent: "space-between",
         gap: 10,
     },
     inlineCategoryContainer: {
@@ -563,13 +564,10 @@ const styles = StyleSheet.create({
     },
     modalFooterButtons: {
         paddingHorizontal: 16,
-        minHeight: 48,
     },
     modalActionButton: {
-        flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        minHeight: 48,
     },
     primaryButton: {
         backgroundColor: "#111",
