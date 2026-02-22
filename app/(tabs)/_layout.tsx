@@ -6,6 +6,7 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const styles = StyleSheet.create({
   tabItem: {
@@ -32,8 +33,10 @@ const styles = StyleSheet.create({
 });
 
 const CustomTabBar = ({ state, descriptors, navigation }: any) => {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={{ flexDirection: 'row' }}>
+    <View style={{ flexDirection: 'row', paddingBottom: insets.bottom, backgroundColor: 'transparent' }}>
       {state.routes.map((route: { key: string | number; name: any; }, index: React.Key | null | undefined) => {
         const { options } = descriptors[route.key];
         const label =
@@ -75,6 +78,7 @@ const CustomTabBar = ({ state, descriptors, navigation }: any) => {
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
 
 	const renderTab = (label: string, icon: string, focused: boolean) => {
 		const tint = focused ? '#fff' : 'rgba(255,255,255,0.7)';
@@ -89,8 +93,7 @@ export default function TabLayout() {
 	};
 
   return (
-    <Tabs
-     tabBar={props => <CustomTabBar {...props} />}
+    <Tabs tabBar={props => <CustomTabBar {...props} />}
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,

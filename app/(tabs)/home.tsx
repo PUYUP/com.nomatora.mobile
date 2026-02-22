@@ -1,7 +1,6 @@
-import MiniLocator from "@/components/partials/mini-locator";
+import LocatorMapbox from "@/components/partials/locator-mapbox";
 import { getCurrentLocation } from "@/libs/location";
 import { CoordsData, PlaceData } from "@/models/location";
-import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -89,22 +88,25 @@ export default function Home() {
     return (
         <SafeAreaView style={{ flex: 1 }} edges={['left', 'right']}>
             <View style={{ width: '100%', height: '100%' }}>
-                <MiniLocator
-                    requestId="expense-location"
-                    purpose="expense"
-                    initialLat={currentLocation ? currentLocation.latitude : 0}
-                    initialLng={currentLocation ? currentLocation.longitude : 0}
-                    initialPlaceName="Jakarta"
-                    onConfirm={(loc) => console.log('confirmed', loc)}
-                    places={places}
-                    mapType={'terrain'}
-                    fitPlacesToMap={false}
-                    controlPosition={{ top: insets.top + 16, right: 16 }}
-                    mapPadding={{ bottom: 350, top: 0, right: 0, left: 0 }}
-                />
+                {currentLocation && (
+                    <LocatorMapbox
+                        requestId="expense-location"
+                        purpose="expense"
+                        initialLat={currentLocation ? currentLocation.latitude : 0}
+                        initialLng={currentLocation ? currentLocation.longitude : 0}
+                        initialPlaceName="Jakarta"
+                        onConfirm={(loc) => console.log('confirmed', loc)}
+                        places={places}
+                        mapType={'terrain'}
+                        fitPlacesToMap={false}
+                        controlPosition={{ top: insets.top + 16, right: 16 }}
+                        mapPadding={{ bottom: 0, top: 0, right: 0, left: 0 }}
+                        isSelecting={false} // user dragging the map to select location
+                    />
+                )}
             </View>
 
-            <LinearGradient
+            {/* <LinearGradient
                 // Background Linear Gradient
                 colors={['rgba(0,0,0,0.4)', 'transparent']}
                 style={styles.backgroundTop}
@@ -114,7 +116,7 @@ export default function Home() {
                 // Background Linear Gradient
                 colors={['transparent', 'rgba(0,0,0,0.6)']}
                 style={styles.backgroundBottom}
-            />
+            /> */}
         </SafeAreaView>
     );
 }

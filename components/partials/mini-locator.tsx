@@ -81,7 +81,6 @@ export default function MiniLocator({
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
 	const [XYPoint, setXYPoint] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-	const [hideSonar, setHideSonar] = useState(false);
 	const pinScale = useRef(new Animated.Value(1)).current;
 	const pinTranslate = useRef(new Animated.Value(0)).current;
 	const mapRef = useRef<MapView | null>(null);
@@ -274,10 +273,6 @@ export default function MiniLocator({
 
 	const handleRegionChangeComplete = async (nextRegion: Region) => {
 		setIsReverseGeocodingLoading(true);
-
-		setTimeout(() => {
-			setHideSonar(false);
-		}, 50);
 
 		if (isDraggingRef.current) {
 			isDraggingRef.current = false;
@@ -506,9 +501,8 @@ export default function MiniLocator({
                                     onLayout={(e) => setMapLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
                                     onRegionChange={handleRegionChange}
                                     onRegionChangeComplete={handleRegionChangeComplete}
-									onRegionChangeStart={() => setHideSonar(true)}
 									onMapReady={handleMapReady}
-											mapPadding={resolvedMapPadding}
+									mapPadding={resolvedMapPadding}
 									showsPointsOfInterest={false}
                                 >
 									{placeCoords.map((coord, index) => (
