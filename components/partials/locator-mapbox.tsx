@@ -3,11 +3,19 @@ import MapMarker from '@/components/ui/mappin';
 import { getCurrentLocation, reverseGeocodeLocation } from '@/libs/location';
 import { PlaceData } from '@/models/location';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import Mapbox, { Camera, FillLayer, LineLayer, MapView as MapboxMapView, MarkerView, ShapeSource } from '@rnmapbox/maps';
+import Mapbox, {
+	Camera,
+	FillLayer,
+	LineLayer,
+	MapView as MapboxMapView,
+	MarkerView,
+	ShapeSource,
+} from '@rnmapbox/maps';
 import type { Feature, GeoJsonProperties, Point, Polygon } from 'geojson';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
+	Alert,
 	Animated,
 	AppState,
 	Image,
@@ -17,7 +25,7 @@ import {
 	Text,
 	TouchableOpacity,
 	View,
-	ViewStyle
+	ViewStyle,
 } from 'react-native';
 import { useDispatch } from 'react-redux';
 
@@ -28,20 +36,20 @@ Mapbox.setTelemetryEnabled(false);
 
 type MapPadding = { top?: number; right?: number; bottom?: number; left?: number };
 
-type ConfirmPayload = { latitude: string; longitude: string; placeName: string; purpose?: string };
+type ConfirmPayload = {
+	latitude: string;
+	longitude: string;
+	placeName: string;
+	purpose?: string;
+};
 
 type RadiusCircleOptions = {
 	/** Radius in meters. Defaults to 500. */
 	radiusMeters?: number;
-	/** Fill colour (CSS colour string). Defaults to '#1382fe'. */
 	fillColor?: string;
-	/** Fill opacity 0–1. Defaults to 0.12. */
 	fillOpacity?: number;
-	/** Border/stroke colour. Defaults to '#1382fe'. */
 	strokeColor?: string;
-	/** Border/stroke width in pixels. Defaults to 2. */
 	strokeWidth?: number;
-	/** Border opacity 0–1. Defaults to 0.8. */
 	strokeOpacity?: number;
 };
 
@@ -59,20 +67,18 @@ type ComponentProps = {
 	controlPosition?: { top?: number; right?: number; bottom?: number; left?: number };
 	mapPadding?: MapPadding;
 	isSelecting?: boolean;
-	/** When provided, renders a radius circle around the current user location. */
 	radiusCircle?: RadiusCircleOptions | false;
+	onUserLocationChange?: (location: { latitude: number; longitude: number } | null) => void;
 };
 
 type PlaceCoord = { latitude: number; longitude: number; title: string };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_ZOOM = 14;
+const DEFAULT_ZOOM = 13;
 const MIN_ZOOM = 2;
 const MAX_ZOOM = 20;
 const EARTH_RADIUS_KM = 6371;
-
-/** Number of points used to approximate the circle polygon. Higher = smoother. */
 const CIRCLE_STEPS = 64;
 
 const MAPBOX_STYLE_URL: Record<NonNullable<ComponentProps['mapType']>, string> = {
@@ -96,45 +102,43 @@ const DEFAULT_RADIUS_OPTIONS: Required<RadiusCircleOptions> = {
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
-/**
- * Builds a GeoJSON Polygon that approximates a geodesic circle.
- *
- * Uses the Haversine-based offset formula so the circle is geographically
- * accurate (i.e. it stays circular at any latitude and zoom level, unlike
- * a plain CSS/View circle overlay which would distort).
- *
- * @param centerLat  Center latitude in decimal degrees
- * @param centerLng  Center longitude in decimal degrees
- * @param radiusMeters  Radius in metres
- * @param steps  Number of polygon vertices (more = smoother)
- */
+function toRadians(degrees: number): number {
+	return degrees * (Math.PI / 180);
+}
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+	const dLat = toRadians(lat2 - lat1);
+	const dLon = toRadians(lon2 - lon1);
+	const a =
+		Math.sin(dLat / 2) ** 2 +
+		Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+	return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1000;
+}
+
 function buildCirclePolygon(
 	centerLat: number,
 	centerLng: number,
 	radiusMeters: number,
-	steps: number = CIRCLE_STEPS,
+	steps = CIRCLE_STEPS,
 ): Feature<Polygon, GeoJsonProperties> {
 	const EARTH_RADIUS_M = 6_371_000;
-	const latRad = (centerLat * Math.PI) / 180;
+	const latRad = toRadians(centerLat);
 	const angularRadius = radiusMeters / EARTH_RADIUS_M;
 
-	const coordinates: [number, number][] = [];
-
-	for (let i = 0; i <= steps; i++) {
-		const bearing = (2 * Math.PI * i) / steps; // 0 → 2π
+	const coordinates: [number, number][] = Array.from({ length: steps + 1 }, (_, i) => {
+		const bearing = (2 * Math.PI * i) / steps;
 		const pointLat = Math.asin(
 			Math.sin(latRad) * Math.cos(angularRadius) +
 				Math.cos(latRad) * Math.sin(angularRadius) * Math.cos(bearing),
 		);
 		const pointLng =
-			(centerLng * Math.PI) / 180 +
+			toRadians(centerLng) +
 			Math.atan2(
 				Math.sin(bearing) * Math.sin(angularRadius) * Math.cos(latRad),
 				Math.cos(angularRadius) - Math.sin(latRad) * Math.sin(pointLat),
 			);
-
-		coordinates.push([(pointLng * 180) / Math.PI, (pointLat * 180) / Math.PI]);
-	}
+		return [(pointLng * 180) / Math.PI, (pointLat * 180) / Math.PI];
+	});
 
 	return {
 		type: 'Feature',
@@ -143,12 +147,39 @@ function buildCirclePolygon(
 	};
 }
 
+function parseLatLng(
+	lat: string | number | undefined,
+	lng: string | number | undefined,
+): { latitude: number; longitude: number } | null {
+	const parsedLat = lat !== undefined ? Number(lat) : NaN;
+	const parsedLng = lng !== undefined ? Number(lng) : NaN;
+	if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
+		return { latitude: parsedLat, longitude: parsedLng };
+	}
+	return null;
+}
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+/** Manages the animated pin scaling/translation during drag. */
+function usePinAnimation() {
+	const pinScale = useRef(new Animated.Value(1)).current;
+	const pinTranslate = useRef(new Animated.Value(0)).current;
+
+	const animate = useCallback(
+		(dragging: boolean) => {
+			const config = { useNativeDriver: true, speed: 20, bounciness: 6 };
+			Animated.spring(pinScale, { toValue: dragging ? 1.1 : 1, ...config }).start();
+			Animated.spring(pinTranslate, { toValue: dragging ? -6 : 0, ...config }).start();
+		},
+		[pinScale, pinTranslate],
+	);
+
+	return { pinScale, pinTranslate, animate };
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/**
- * Marker image rendered inside a MarkerView.
- * Green = first stop, red = last stop, blue = intermediate.
- */
 export const CustomMarker = ({
 	coord,
 	index,
@@ -163,41 +194,56 @@ export const CustomMarker = ({
 	isDragMarkerVisible: boolean;
 }) => {
 	if (!coord) return null;
+
 	const isFirst = index === 0;
 	const isLast = total > 1 && index === total - 1;
+
 	const asset = isFirst
 		? require('../../assets/markers/destination-green.png')
 		: isLast
 			? require('../../assets/markers/destination.png')
 			: require('../../assets/markers/destination-blue.png');
-	const markerStyle = isFirst ? styles.startMarker : isLast ? styles.endMarker : null;
 
 	const hereNowTranslate = useRef(new Animated.Value(0)).current;
 
 	useEffect(() => {
 		if (!isLast) return;
-		Animated.loop(
+		const anim = Animated.loop(
 			Animated.sequence([
 				Animated.timing(hereNowTranslate, { toValue: -6, duration: 1000, useNativeDriver: true }),
 				Animated.timing(hereNowTranslate, { toValue: 0, duration: 500, useNativeDriver: true }),
 			]),
-		).start();
-	}, [hereNowTranslate, isLast, isDragMarkerVisible]);
+		);
+		anim.start();
+		return () => anim.stop();
+	}, [hereNowTranslate, isLast]);
+
+	const markerStyle = isFirst ? styles.startMarker : isLast ? styles.endMarker : null;
+	const showImage = !(isLast && isDragMarkerVisible);
+	const showBadge = isLast && !isDragMarkerVisible;
 
 	return (
-		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]} >
-			{!(isLast && isDragMarkerVisible) && <Image source={asset} style={{ width: 40, height: 40 }} />}
-			{isLast && !isDragMarkerVisible && (
-				<View style={[styles.hereNowGroup, { transform: [{ translateX: Platform.OS === 'ios' ? -40 : -42 }] }]} >
+		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]}>
+			{showImage && <Image source={asset} style={{ width: 40, height: 40 }} />}
+			{showBadge && (
+				<View
+					style={[
+						styles.hereNowGroup,
+						{ transform: [{ translateX: Platform.OS === 'ios' ? -48 : -50 }] },
+					]}
+				>
 					<Animated.View style={{ transform: [{ translateY: hereNowTranslate }] }}>
 						<View style={styles.hereNowBadge}>
 							<TouchableOpacity onPress={() => onChangeLocation(coord)}>
 								<View style={styles.changeLocationButton}>
-									<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>Change</Text>
+									<MaterialCommunityIcons name="map-marker-radius" size={20} color="#333" />
+									<Text style={{ fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
+										Change
+									</Text>
 								</View>
 							</TouchableOpacity>
 						</View>
-						<View style={styles.hereNowArrowWrapper}> 
+						<View style={styles.hereNowArrowWrapper}>
 							<View style={styles.hereNowArrow} />
 						</View>
 					</Animated.View>
@@ -207,7 +253,7 @@ export const CustomMarker = ({
 	);
 };
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function LocatorMapbox({
 	requestId,
@@ -225,88 +271,58 @@ export default function LocatorMapbox({
 	isSelecting = false,
 	radiusCircle,
 	onUserLocationChange,
-}: ComponentProps & { onUserLocationChange?: (location: { latitude: number; longitude: number } | null) => void }) {
+}: ComponentProps) {
 	const dispatch = useDispatch();
+	const { pinScale, pinTranslate, animate: animatePin } = usePinAnimation();
 
-	// ─── Props modifiers / derived values ─────────────────────────────────────
-	const [onSelecting, setOnSelecting] = useState<boolean>(isSelecting);
-
-	// ─── Lifecycle refs ───────────────────────────────────────────────────────
+	// ─── Refs ─────────────────────────────────────────────────────────────────
 	const isMounted = useRef(true);
 	const appState = useRef(AppState.currentState);
-	const geocodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	useEffect(() => {
-		isMounted.current = true;
-		return () => {
-			isMounted.current = false;
-			if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
-			setOnSelecting((prev) => !prev);
-			setIsDragMarkerVisible(false);
-		};
-	}, []);
-
-	// ─── Map refs ─────────────────────────────────────────────────────────────
+	const draggingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const mapRef = useRef<Mapbox.MapView | null>(null);
 	const cameraRef = useRef<Mapbox.Camera | null>(null);
-	/** Tracks last known camera state to avoid reading stale React state in sync callbacks. */
 	const lastCameraRef = useRef<{ center: { latitude: number; longitude: number }; zoom: number } | null>(null);
-	/** Marks that the next region change is caused by our own camera move. */
 	const isProgrammaticMoveRef = useRef(false);
-	/** Timestamp until which we ignore region change callbacks after a programmatic move. */
 	const ignoreRegionEventsUntilRef = useRef(0);
-
-	// ─── Pin animation refs ───────────────────────────────────────────────────
-	const pinScale = useRef(new Animated.Value(1)).current;
-	const pinTranslate = useRef(new Animated.Value(0)).current;
 	const isDraggingRef = useRef(false);
 
 	// ─── State ────────────────────────────────────────────────────────────────
-	// NOTE: cameraCenter is the single source of truth for camera position.
-	// The old code had a duplicate `centerCoords` state that was always set to the
-	// same value — removed in favour of reading lastCameraRef.current?.center instead.
+	const [onSelecting, setOnSelecting] = useState(isSelecting);
 	const [cameraCenter, setCameraCenter] = useState<{ latitude: number; longitude: number } | null>(null);
-	const [cameraZoom, setCameraZoom] = useState<number>(DEFAULT_ZOOM);
+	const [cameraZoom, setCameraZoom] = useState(DEFAULT_ZOOM);
 	const [isLoading, setIsLoading] = useState(false);
-	const [mapLayout, setMapLayout] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+	const [mapLayout, setMapLayout] = useState({ width: 0, height: 0 });
 	const [localPlaces, setLocalPlaces] = useState<PlaceData[]>(places ?? []);
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
 	const [isDragMarkerVisible, setIsDragMarkerVisible] = useState(false);
 	const [isStarting, setIsStarting] = useState(false);
+	const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
+		() => parseLatLng(initialLat, initialLng),
+	);
 
-	/**
-	 * The live GPS position of the device — used exclusively as the circle center.
-	 * Separate from cameraCenter so the circle follows the real user position even
-	 * when the camera has been panned elsewhere (e.g. in isSelecting mode).
-	 */
-	const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(() => {
-		const lat = initialLat !== undefined ? Number(initialLat) : undefined;
-		const lng = initialLng !== undefined ? Number(initialLng) : undefined;
-		if (typeof lat === 'number' && !Number.isNaN(lat) && typeof lng === 'number' && !Number.isNaN(lng)) {
-			return { latitude: lat, longitude: lng };
-		}
-		return null;
-	});
-
-	// Call onUserLocationChange whenever userLocation changes
+	// ─── Lifecycle ────────────────────────────────────────────────────────────
 	useEffect(() => {
-		if (onUserLocationChange) {
-			onUserLocationChange(userLocation);
-		}
+		isMounted.current = true;
+		return () => {
+			isMounted.current = false;
+			if (draggingTimerRef.current) clearTimeout(draggingTimerRef.current);
+			setOnSelecting(false);
+			setIsDragMarkerVisible(false);
+		};
+	}, []);
+
+	useEffect(() => {
+		onUserLocationChange?.(userLocation);
 	}, [userLocation, onUserLocationChange]);
 
-	// ─── Derived / memoized values ────────────────────────────────────────────
-
+	// ─── Derived values ───────────────────────────────────────────────────────
 	const initialCoord = useMemo<PlaceCoord | null>(() => {
-		if (initialLat === undefined || initialLng === undefined) return null;
-		const lat = Number(initialLat);
-		const lng = Number(initialLng);
-		if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-		return { latitude: lat, longitude: lng, title: initialPlaceName || 'Initial location' };
+		const coords = parseLatLng(initialLat, initialLng);
+		if (!coords) return null;
+		return { ...coords, title: initialPlaceName || 'Initial location' };
 	}, [initialLat, initialLng, initialPlaceName]);
 
-	/** Merged padding resolved into the Mapbox Camera shape in one step. */
 	const mapboxPadding = useMemo(
 		() => ({
 			paddingTop: mapPadding?.top ?? DEFAULT_MAP_PADDING.top,
@@ -318,7 +334,7 @@ export default function LocatorMapbox({
 	);
 
 	const mapStyleUrl = useMemo(
-		() => (mapType ? MAPBOX_STYLE_URL[mapType] : MAPBOX_STYLE_URL.standard),
+		() => MAPBOX_STYLE_URL[mapType ?? 'standard'],
 		[mapType],
 	);
 
@@ -328,27 +344,15 @@ export default function LocatorMapbox({
 			longitude: p.geometry.coordinate.longitude,
 			title: p.properties.name,
 		}));
-
-		// Append the initial coord as a visual pin unless the user has manually recentered.
 		if (!hasUserRecentered && initialCoord) mapped.push(initialCoord);
 		return mapped;
 	}, [localPlaces, initialCoord, hasUserRecentered]);
 
-	/**
-	 * Resolved radius circle options — merges caller's overrides with defaults.
-	 * Returns null when radiusCircle === false (feature disabled).
-	 */
 	const resolvedRadiusCircle = useMemo<Required<RadiusCircleOptions> | null>(() => {
-		if (radiusCircle === false || radiusCircle === undefined) return null;
+		if (!radiusCircle) return null;
 		return { ...DEFAULT_RADIUS_OPTIONS, ...radiusCircle };
 	}, [radiusCircle]);
 
-	/**
-	 * GeoJSON polygon for the radius circle.
-	 * Recomputed only when the user location or radius options change.
-	 * Rendered as a FillLayer (filled area) + LineLayer (border) inside Mapbox,
-	 * which ensures the circle scales and distorts correctly with the map projection.
-	 */
 	const radiusCircleGeoJSON = useMemo<Feature<Polygon, GeoJsonProperties> | null>(() => {
 		if (!resolvedRadiusCircle || !userLocation) return null;
 		return buildCirclePolygon(
@@ -358,11 +362,14 @@ export default function LocatorMapbox({
 		);
 	}, [resolvedRadiusCircle, userLocation]);
 
-	// ─── Helpers ──────────────────────────────────────────────────────────────
+	// ─── Core helpers ─────────────────────────────────────────────────────────
 
-	/** Apply camera center + zoom in one call and keep lastCameraRef in sync. */
 	const applyCamera = useCallback(
-		(center: { latitude: number; longitude: number }, zoom = DEFAULT_ZOOM, animationDuration = 0) => {
+		(
+			center: { latitude: number; longitude: number },
+			zoom = DEFAULT_ZOOM,
+			animationDuration = 0,
+		) => {
 			setCameraCenter(center);
 			setCameraZoom(zoom);
 			lastCameraRef.current = { center, zoom };
@@ -393,101 +400,48 @@ export default function LocatorMapbox({
 		[dispatch, onConfirm, purpose, requestId],
 	);
 
-	/** Handler for when user taps "change" on the "Here Now" badge. */
-	const handleChangeLocation = ((coord: PlaceCoord) => {
-		setIsStarting(true);
-		setOnSelecting(true);
-		setIsDragMarkerVisible(false); // Hide the "Selected location" marker when user taps "change".
-	});
+	const zoomBy = useCallback((factor: number, animationDuration = 180) => {
+		const current = lastCameraRef.current;
+		if (!current) return;
+		const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, current.zoom - Math.log2(factor)));
+		cameraRef.current?.setCamera({ zoomLevel: nextZoom, animationDuration });
+		lastCameraRef.current = { ...current, zoom: nextZoom };
+	}, []);
 
-	/** Animate the selection pin on drag start / end. */
-	const animatePin = useCallback(
-		(dragging: boolean) => {
-			Animated.spring(pinScale, {
-				toValue: dragging ? 1.1 : 1,
-				useNativeDriver: true,
-				speed: 20,
-				bounciness: 6,
-			}).start();
-			Animated.spring(pinTranslate, {
-				toValue: dragging ? -6 : 0,
-				useNativeDriver: true,
-				speed: 20,
-				bounciness: 6,
-			}).start();
+	/** Returns the distance (m) from the user/initial location to the given map coords. */
+	const getSelectionRadius = useCallback(
+		(lat: number, lng: number): number | null => {
+			if (!initialLat && !initialLng) return null;
+			const origin = userLocation ?? lastCameraRef.current?.center;
+			if (!origin) return null;
+			return calculateDistance(origin.latitude, origin.longitude, lat, lng);
 		},
-		[pinScale, pinTranslate],
+		[initialLat, initialLng, userLocation],
 	);
-
-	/**
-	 * Calculates the distance (radius) in kilometers between two geographic coordinates
-	 * using the Haversine formula.
-	 */
-	const toRadians = (degrees: number): number => {
-		return degrees * (Math.PI / 180);
-	}
-
-	/** 
-	 * Calculates the distance (radius) in kilometers between two geographic coordinates using the Haversine formula. 
-	 * 
-	 * @param lat1 - Latitude of the first coordinate.
-	 * @param lon1 - Longitude of the first coordinate.
-	 * @param lat2 - Latitude of the second coordinate.
-	 * @param lon2 - Longitude of the second coordinate.
-	 * @returns The distance in meters between the two coordinates.
-	 */
-	const calculateDistance = (
-		lat1: number,
-		lon1: number,
-		lat2: number,
-		lon2: number
-	): number => {
-		const dLat = toRadians(lat2 - lat1);
-		const dLon = toRadians(lon2 - lon1);
-
-		const a =
-			Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-			Math.cos(toRadians(lat1)) *
-			Math.cos(toRadians(lat2)) *
-			Math.sin(dLon / 2) *
-			Math.sin(dLon / 2);
-
-		const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-		return EARTH_RADIUS_KM * c * 1000; // Convert kilometers to meters
-	}
 
 	// ─── Location flow ────────────────────────────────────────────────────────
 
 	const initializeLocationFlow = useCallback(async () => {
 		setIsLoading(true);
 
-		// 1. Use provided initial coordinates if valid.
-		const parsedLat = initialLat !== undefined ? Number(initialLat) : NaN;
-		const parsedLng = initialLng !== undefined ? Number(initialLng) : NaN;
-		if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLng)) {
-			applyCamera({ latitude: parsedLat, longitude: parsedLng });
-			broadcastLocation(parsedLat, parsedLng, initialPlaceName ?? '');
+		const initial = parseLatLng(initialLat, initialLng);
+		if (initial) {
+			applyCamera(initial);
+			broadcastLocation(initial.latitude, initial.longitude, initialPlaceName ?? '');
 			setIsLoading(false);
 			return;
 		}
 
-		// 2. Fall back to device GPS.
-		// NOTE: a `saved` (persisted location) step can be slotted in here in the
-		//       future between steps 1 and 2 when persistence is implemented.
 		const location = await getCurrentLocation();
 		if (!isMounted.current) return;
 
 		if (location.ok) {
 			const { latitude, longitude } = location.data;
 			applyCamera({ latitude, longitude });
-
 			const geocoded = await reverseGeocodeLocation(latitude, longitude);
 			if (!isMounted.current) return;
-
 			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
 		} else {
-			// Fallback to a neutral center so the map is usable even without location.
 			applyCamera({ latitude: 0, longitude: 0 });
 		}
 
@@ -500,26 +454,19 @@ export default function LocatorMapbox({
 		initializeLocationFlow();
 	}, [initializeLocationFlow]);
 
-	// Replace last places with center of map when user toggles selection mode on.
 	useEffect(() => {
-		if (onSelecting) {
-			const lastCoord = placeCoords[placeCoords.length - 1];
-			applyCamera({ 
-				latitude: lastCoord.latitude, 
-				longitude: lastCoord.longitude 
-			}, DEFAULT_ZOOM, 250);
-		}
-	}, [onSelecting]);
+		if (!onSelecting) return;
+		const lastCoord = placeCoords[placeCoords.length - 1];
+		if (lastCoord) applyCamera({ latitude: lastCoord.latitude, longitude: lastCoord.longitude }, DEFAULT_ZOOM, 250);
+	}, [onSelecting]); // eslint-disable-line react-hooks/exhaustive-deps
 
-	// Sync external `places` prop into local state.
 	useEffect(() => {
 		setLocalPlaces(places ?? []);
 		setHasUserRecentered(false);
 	}, [places]);
 
-	// Re-run location flow when the app returns to foreground.
 	useEffect(() => {
-		const subscription = AppState.addEventListener('change', async (nextAppState) => {
+		const subscription = AppState.addEventListener('change', (nextAppState) => {
 			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
 				initializeLocationFlow();
 			}
@@ -528,10 +475,8 @@ export default function LocatorMapbox({
 		return () => subscription.remove();
 	}, [initializeLocationFlow]);
 
-	// Fit camera to all place markers once the map has laid out.
 	useEffect(() => {
-		if (!fitPlacesToMap) return;
-		if (!cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
+		if (!fitPlacesToMap || !cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
 		const lats = placeCoords.map((p) => p.latitude);
 		const lngs = placeCoords.map((p) => p.longitude);
 		isProgrammaticMoveRef.current = true;
@@ -546,89 +491,129 @@ export default function LocatorMapbox({
 
 	// ─── Map event handlers ───────────────────────────────────────────────────
 
-	const getSelectionRadiusFromCurrentLocation = (lat: number, lng: number) => {
-		if (!initialLat && !initialLng) return null;
-		const current = lastCameraRef.current;
-		if (!current) return null;
-		const { latitude, longitude } = userLocation ?? current.center;
-		// Approximate radius as distance from center to top edge of map view.
-		const radius = calculateDistance(latitude, longitude, lat, lng);
-		return radius;
-	}
-
-	const handleRegionIsChanging = async (feature: Feature<Point>) => {
-		if (onSelecting) {
-			if (geocodeTimerRef.current) clearTimeout(geocodeTimerRef.current);
-			geocodeTimerRef.current = setTimeout(async () => {
-				setIsDragMarkerVisible(true); // Show the "Selected location" marker after user has stopped dragging for 500ms.
-				setIsStarting(false);
-				setHasUserRecentered(true);
-			}, 5);
-
-			const [longitude, latitude] = feature.geometry.coordinates;
-			const name = `Selected location${getSelectionRadiusFromCurrentLocation(latitude, longitude) ? ` (±${Math.round(getSelectionRadiusFromCurrentLocation(latitude, longitude)!)}m)` : ''}`;
-			setLocalPlaces((prev) => {
-				prev.pop(); // remove previous "Selected location" if exists
-				return [...prev, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
-			});
-		}
-
-		if (!onSelecting || isDraggingRef.current) return;
-		isDraggingRef.current = true;
-		animatePin(true);
-	};
-
-	const handleRegionDidChange = (async (feature: Feature<Point>) => {
-		const isUserInteraction = feature.properties?.isUserInteraction;
-
-		// user is dragging the map to select location
-		if (isUserInteraction) {
-			if (!onSelecting) return;
-			if (isDraggingRef.current) {
-				isDraggingRef.current = false;
-				animatePin(false);
+	const handleRegionIsChanging = useCallback(
+		(feature: Feature<Point>) => {
+			if (onSelecting) {
+				if (draggingTimerRef.current) clearTimeout(draggingTimerRef.current);
+				draggingTimerRef.current = setTimeout(() => {
+					if (!isDragMarkerVisible) setIsDragMarkerVisible(true);
+					if (isStarting) setIsStarting(false);
+					draggingTimerRef.current = null;
+				}, 100);
 
 				const [longitude, latitude] = feature.geometry.coordinates;
-				const geocoded = await reverseGeocodeLocation(latitude, longitude);
-				const name = geocoded.ok ? geocoded.data.name : 'Selected location';
-				broadcastLocation(latitude, longitude, name);
+				const radius = getSelectionRadius(latitude, longitude);
+				const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
 
-				// calulate radius from current location to selected location and update localPlaces to show it in the badge
-				const radius = getSelectionRadiusFromCurrentLocation(latitude, longitude);
+				setLocalPlaces((prev) => {
+					const next = [...prev];
+					next.pop();
+					return [
+						...next,
+						{
+							properties: { name: `Selected location${radiusText}` },
+							geometry: { coordinate: { latitude, longitude } },
+						},
+					];
+				});
+				setHasUserRecentered(true);
+			}
+
+			if (!isDraggingRef.current) {
+				isDraggingRef.current = true;
+				animatePin(true);
+			}
+		},
+		[onSelecting, getSelectionRadius, animatePin],
+	);
+
+	const handleRegionDidChange = useCallback(
+		async (feature: Feature<Point>) => {
+			const isUserInteraction = feature.properties?.isUserInteraction;
+			const wasUserDrag = isDraggingRef.current;
+			if (wasUserDrag) {
+				isDraggingRef.current = false;
+				animatePin(false);
+			}
+
+			if ((wasUserDrag || isUserInteraction) && onSelecting && !isRecentering) {
+				const [longitude, latitude] = feature.geometry.coordinates;
+				const radius = getSelectionRadius(latitude, longitude);
 				const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
 
 				if (resolvedRadiusCircle && radius && userLocation) {
 					if (radius > resolvedRadiusCircle.radiusMeters) {
+						// Out of bounds — snap back to user location
 						setLocalPlaces((prev) => {
-							prev.pop(); // remove previous set from handleRegionIsChanging
-							return [...prev, { properties: { name }, geometry: { coordinate: { latitude: userLocation?.latitude, longitude: userLocation?.longitude } } }];
+							const next = [...prev];
+							next.pop();
+							return [
+								...next,
+								{
+									properties: { name: `Selected location${radiusText}` },
+									geometry: {
+										coordinate: {
+											latitude: userLocation.latitude,
+											longitude: userLocation.longitude,
+										},
+									},
+								},
+							];
 						});
+						cameraRef.current?.setCamera({
+							centerCoordinate: [userLocation.longitude, userLocation.latitude],
+							zoomLevel: 15.5,
+							animationDuration: 50,
+						});
+						setIsDragMarkerVisible(true);
+						setHasUserRecentered(true);
 
-						applyCamera({ latitude: userLocation.latitude, longitude: userLocation.longitude }, cameraZoom, 300);
-						setIsDragMarkerVisible(true); // Hide the "Selected location" marker if selection is out of radius.
-						setHasUserRecentered(true);	
+						// Alerting too-far selection with a brief red flash of the radius circle
+						Alert.alert('Out of bounds', `Please select a location within ${Math.round(resolvedRadiusCircle.radiusMeters)} meters of your current location.`);
+					} else {
+						const geocoded = await reverseGeocodeLocation(latitude, longitude);
+						if (geocoded.ok) {
+							broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : 'Selected location');
+						}
 					}
 				}
+
+				if (draggingTimerRef.current) {
+					clearTimeout(draggingTimerRef.current);
+					draggingTimerRef.current = null;
+				}
 			}
+		},
+		[onSelecting, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin],
+	);
+
+	// ─── Controls ─────────────────────────────────────────────────────────────
+
+	const handleChangeLocation = useCallback(() => {
+		// clear latest location from localPlaces
+		// then set again with current userLocation
+		if (userLocation) {
+			setLocalPlaces((prev) => {
+				const next = [...prev];
+				next.pop();
+				return [...next, { properties: { name: 'Selected location' }, geometry: { coordinate: { latitude: userLocation.latitude, longitude: userLocation.longitude } } }];
+			});
+			setHasUserRecentered(true);
 		}
-	});
 
-	// ─── Camera controls ──────────────────────────────────────────────────────
+		setIsStarting(true);
+		setOnSelecting(true);
+		setIsDragMarkerVisible(true);
+	
+		setTimeout(() => {
+			zoomBy(0.2, 50);
+		}, 50);
+	}, [zoomBy, setLocalPlaces, userLocation]);
 
-	const zoomBy = useCallback((factor: number) => {
-		const current = lastCameraRef.current;
-		if (!current) return;
-		const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, current.zoom - Math.log2(factor)));
-		cameraRef.current?.setCamera({ zoomLevel: nextZoom, animationDuration: 180 });
-		lastCameraRef.current = { ...current, zoom: nextZoom };
-	}, []);
-
-	/** Focus back to current user location */
 	const recenterToUserLocation = useCallback(async () => {
 		setIsRecentering(true);
 		const location = await getCurrentLocation();
 		if (!isMounted.current) return;
-
 		if (!location.ok) {
 			setIsRecentering(false);
 			return;
@@ -637,171 +622,125 @@ export default function LocatorMapbox({
 		const { latitude, longitude } = location.data;
 		const geocoded = await reverseGeocodeLocation(latitude, longitude);
 		if (!isMounted.current) return;
-
 		const name = geocoded.ok ? geocoded.data.name : 'Current location';
 
+		// Update the latest location in localPlaces so it doesn't show up as a duplicate when the user drags the pin
 		setLocalPlaces((prev) => {
-			prev.pop(); // remove previous "Current location" if exists
-			const deduped = prev.filter(
-				(p) => p.geometry.coordinate.latitude !== latitude || p.geometry.coordinate.longitude !== longitude,
-			);
-			return [...deduped, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
+			const next = [...prev];
+			next.pop();
+			return [...next, { properties: { name }, geometry: { coordinate: { latitude, longitude } } }];
 		});
 		setHasUserRecentered(true);
 		applyCamera({ latitude, longitude }, DEFAULT_ZOOM, 250);
 		broadcastLocation(latitude, longitude, name);
-		setIsRecentering(false);
-
-		// disable selection mode and hide.
-		setOnSelecting(false);
-		setIsDragMarkerVisible(false); // Hide the "Selected location" marker when recentering to user location.
-    
-		// update userLocation state to move radius circle
 		setUserLocation({ latitude, longitude });
-	}, [applyCamera, broadcastLocation]);
+		setOnSelecting(false);
+		setIsDragMarkerVisible(false);
+		setIsRecentering(false);
+	}, [applyCamera, broadcastLocation, setLocalPlaces]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
+
+	const routeCoordinates = placeCoords.map(({ latitude, longitude }) => [longitude, latitude]);
 
 	return (
 		<View style={[styles.container, containerStyle]}>
 			<View style={styles.page}>
-					<View style={styles.mapCard}>
-						{/*
-						 * MapboxMapView is ALWAYS mounted — never conditionally unmounted.
-						 * Toggling mount/unmount destroys the native view tag, causing:
-						 *   "Could not find view with tag XXXX in setHandledMapChangedEvents"
-						 * A transparent loading overlay is used instead.
-						 */}
-						<View style={styles.mapWrapper}>
-							<MapboxMapView
-								ref={(ref) => { mapRef.current = ref; }}
-								style={styles.map}
-								styleURL={mapStyleUrl}
-								logoEnabled={false}
-								attributionEnabled={false}
-								scaleBarEnabled={false}
-								regionWillChangeDebounceTime={500}
-								onRegionIsChanging={handleRegionIsChanging}
-								onRegionDidChange={handleRegionDidChange}
-								rotateEnabled
-								pitchEnabled
-								scrollEnabled
-								zoomEnabled
-								onLayout={(e) =>
-									setMapLayout({
-										width: e.nativeEvent.layout.width,
-										height: e.nativeEvent.layout.height,
-									})
-								}
-							>
-								{/*
-								 * Camera is conditionally rendered inside the always-mounted MapView.
-								 * This prevents it from animating to null coordinates before the
-								 * location flow completes.
-								 */}
-								{cameraCenter && (
-									<Camera
-										ref={cameraRef}
-										centerCoordinate={[cameraCenter.longitude, cameraCenter.latitude]}
-										zoomLevel={cameraZoom}
-										animationDuration={0}
-										padding={mapboxPadding}
-									/>
-								)}
-
-								{/*
-								 * ─── Radius circle ────────────────────────────────────────────────
-								 *
-								 * Rendered as a native Mapbox FillLayer + LineLayer on top of a
-								 * ShapeSource. This is the correct approach because:
-								 *
-								 *  1. Geographic accuracy — the polygon is built using the Haversine
-								 *     formula, so it remains a true circle regardless of latitude or
-								 *     zoom level (a plain CSS/View circle would squash/stretch).
-								 *
-								 *  2. Proper z-ordering — it renders below markers and the route line
-								 *     because it is declared first in JSX (Mapbox respects source order).
-								 *
-								 *  3. Performance — Mapbox renders it on the GL thread, not the JS
-								 *     thread, so there is zero layout/render overhead per frame.
-								 *
-								 * Layer IDs use a unique prefix to avoid collisions with route layers.
-								 */}
-								{resolvedRadiusCircle && radiusCircleGeoJSON && onSelecting && (
-									<ShapeSource id="radius-circle-source" shape={radiusCircleGeoJSON}>
-										{/* Filled area */}
-										<FillLayer
-											id="radius-circle-fill"
-											style={{
-												fillColor: resolvedRadiusCircle.fillColor,
-												fillOpacity: resolvedRadiusCircle.fillOpacity,
-											}}
-										/>
-										{/* Stroke / border */}
-										<LineLayer
-											id="radius-circle-stroke"
-											style={{
-												lineColor: resolvedRadiusCircle.strokeColor,
-												lineWidth: resolvedRadiusCircle.strokeWidth,
-												lineOpacity: resolvedRadiusCircle.strokeOpacity,
-											}}
-										/>
-									</ShapeSource>
-								)}
-
-								{placeCoords.map((coord, index) => (
-									<MarkerView
-										key={`place-${index}`}
-										id={`place-${index}`}
-										coordinate={[coord.longitude, coord.latitude]}
-										anchor={{ x: 0.5, y: Platform.OS === 'ios' ? 0.85 : 1 }}
-									>
-										<View
-											style={[
-												styles.markerContainer,
-												Platform.OS === 'ios' && styles.markerContainerIos,
-											]}
-										>
-											<CustomMarker 
-												coord={coord} 
-												index={index} 
-												total={placeCoords.length} 
-												onChangeLocation={handleChangeLocation} 
-												isDragMarkerVisible={isDragMarkerVisible} 
-											/>
-										</View>
-									</MarkerView>
-								))}
-
-								{placeCoords.length >= 2 && !isStarting && (
-									<ShapeSource
-										id="route"
-										shape={{
-											type: 'Feature',
-											geometry: {
-												type: 'LineString',
-												coordinates: placeCoords.map(({ latitude, longitude }) => [
-													longitude,
-													latitude,
-												]),
-											},
-											properties: {},
-										}}
-									>
-										<LineLayer id="route-line" style={{ lineColor: '#1382fe', lineWidth: 2 }} />
-									</ShapeSource>
-								)}
-							</MapboxMapView>
-
-							{/* Loading overlay — map stays alive underneath */}
-							{(isLoading || !cameraCenter) && (
-								<View style={styles.mapLoadingOverlay} pointerEvents="none">
-									<ActivityIndicator size="small" />
-									<Text style={styles.mutedText}>Loading map…</Text>
-								</View>
+				<View style={styles.mapCard}>
+					<View style={styles.mapWrapper}>
+						<MapboxMapView
+							ref={(ref) => { mapRef.current = ref; }}
+							style={styles.map}
+							styleURL={mapStyleUrl}
+							logoEnabled={false}
+							attributionEnabled={false}
+							scaleBarEnabled={false}
+							regionWillChangeDebounceTime={500}
+							onRegionIsChanging={handleRegionIsChanging}
+							onRegionDidChange={handleRegionDidChange}
+							rotateEnabled
+							pitchEnabled
+							scrollEnabled
+							zoomEnabled
+							onLayout={(e) =>
+								setMapLayout({
+									width: e.nativeEvent.layout.width,
+									height: e.nativeEvent.layout.height,
+								})
+							}
+						>
+							{cameraCenter && (
+								<Camera
+									ref={cameraRef}
+									centerCoordinate={[cameraCenter.longitude, cameraCenter.latitude]}
+									zoomLevel={cameraZoom}
+									animationDuration={0}
+									padding={mapboxPadding}
+								/>
 							)}
 
-							{onSelecting && isDragMarkerVisible && (
+							{resolvedRadiusCircle && radiusCircleGeoJSON && onSelecting && (
+								<ShapeSource id="radius-circle-source" shape={radiusCircleGeoJSON}>
+									<FillLayer
+										id="radius-circle-fill"
+										style={{
+											fillColor: resolvedRadiusCircle.fillColor,
+											fillOpacity: resolvedRadiusCircle.fillOpacity,
+										}}
+									/>
+									<LineLayer
+										id="radius-circle-stroke"
+										style={{
+											lineColor: resolvedRadiusCircle.strokeColor,
+											lineWidth: resolvedRadiusCircle.strokeWidth,
+											lineOpacity: resolvedRadiusCircle.strokeOpacity,
+										}}
+									/>
+								</ShapeSource>
+							)}
+
+							{placeCoords.map((coord, index) => (
+								<MarkerView
+									key={`place-${index}`}
+									id={`place-${index}`}
+									coordinate={[coord.longitude, coord.latitude]}
+									anchor={{ x: 0.5, y: Platform.OS === 'ios' ? 0.85 : 1 }}
+								>
+									<View style={[styles.markerContainer, Platform.OS === 'ios' && styles.markerContainerIos]}>
+										<CustomMarker
+											coord={coord}
+											index={index}
+											total={placeCoords.length}
+											onChangeLocation={handleChangeLocation}
+											isDragMarkerVisible={isDragMarkerVisible}
+										/>
+									</View>
+								</MarkerView>
+							))}
+
+							{placeCoords.length >= 2 && !isStarting && (
+								<ShapeSource
+									id="route"
+									shape={{
+										type: 'Feature',
+										geometry: { type: 'LineString', coordinates: routeCoordinates },
+										properties: {},
+									}}
+								>
+									<LineLayer id="route-line" style={{ lineColor: '#1382fe', lineWidth: 2 }} />
+								</ShapeSource>
+							)}
+						</MapboxMapView>
+
+						{(isLoading || !cameraCenter) && (
+							<View style={styles.mapLoadingOverlay} pointerEvents="none">
+								<ActivityIndicator size="small" />
+								<Text style={styles.mutedText}>Loading map…</Text>
+							</View>
+						)}
+
+						{onSelecting && isDragMarkerVisible && (
+							<>
 								<View style={styles.centerMarker} pointerEvents="none">
 									<Animated.View
 										style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}
@@ -814,31 +753,53 @@ export default function LocatorMapbox({
 										<AnimatedOval />
 									</View>
 								</View>
-							)}
 
-							<View style={[styles.zoomControls, controlPosition]}>
-								<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
-									<MaterialCommunityIcons name="plus" size={26} />
-								</TouchableOpacity>
-								<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
-									<MaterialCommunityIcons name="minus" size={26} />
-								</TouchableOpacity>
-								<TouchableOpacity
-									style={styles.zoomButton}
-									onPress={recenterToUserLocation}
-									disabled={isRecentering}
-								>
-									{isRecentering ? (
-										<ActivityIndicator size="small" />
-									) : (
-										<MaterialCommunityIcons name="crosshairs-gps" size={22} />
-									)}
-								</TouchableOpacity>
-							</View>
+								{/* cancel selection button */}
+								<View style={ styles.cancelSelectionContainer}>
+									<TouchableOpacity
+										style={styles.cancelSelectionButton}
+										onPress={() => {
+											setOnSelecting(false);
+											setIsDragMarkerVisible(false);
+											if (userLocation) {
+												applyCamera(userLocation, DEFAULT_ZOOM, 250);
+												broadcastLocation(userLocation.latitude, userLocation.longitude, 'Selected location');
+											}
+										}}
+									>
+										<MaterialCommunityIcons name="close-circle" size={20} color="#333" />
+										<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>
+											Cancel
+										</Text>
+									</TouchableOpacity>
+								</View>
+							</>
+						)}
+
+						<View style={[styles.zoomControls, controlPosition]}>
+							<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
+								<MaterialCommunityIcons name="plus" size={26} />
+							</TouchableOpacity>
+							<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
+								<MaterialCommunityIcons name="minus" size={26} />
+							</TouchableOpacity>
+							<TouchableOpacity
+								style={[styles.zoomButton, { opacity: isRecentering || onSelecting ? 0.5 : 1 }]}
+								onPress={recenterToUserLocation}
+								disabled={isRecentering || onSelecting}
+								activeOpacity={0.6}
+							>
+								{isRecentering ? (
+									<ActivityIndicator size="small" />
+								) : (
+									<MaterialCommunityIcons name="crosshairs-gps" size={22} />
+								)}
+							</TouchableOpacity>
 						</View>
 					</View>
 				</View>
 			</View>
+		</View>
 	);
 }
 
@@ -957,13 +918,38 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 8,
 		borderRadius: 16,
 		display: 'flex',
+		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
+		gap: 3,
 	},
 	lastMarker: {
 		width: 100,
 		height: 90,
 		justifyContent: 'flex-end',
 		alignItems: 'center',
-	}
+	},
+	cancelSelectionContainer: {
+		position: 'absolute',
+		left: 0,
+		right: 0,
+		top: '38%',
+		zIndex: 999,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	cancelSelectionButton: {
+		backgroundColor: '#ffd700',
+		paddingHorizontal: 6,
+		paddingVertical: 6,
+		borderRadius: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.25,
+		shadowRadius: 3.84,
+		flexDirection: 'row',
+		gap: 6,
+	},
 });
