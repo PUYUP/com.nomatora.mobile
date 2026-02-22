@@ -698,8 +698,8 @@ export default function LocatorMapbox({
 
 							{placeCoords.map((coord, index) => (
 								<MarkerView
-									key={`place-${index}`}
-									id={`place-${index}`}
+									key={`place-${coord.latitude}-${coord.longitude}-${index}`}
+									id={`place-${coord.latitude}-${coord.longitude}-${index}`}
 									coordinate={[coord.longitude, coord.latitude]}
 									anchor={{ x: 0.5, y: Platform.OS === 'ios' ? 0.85 : 1 }}
 								>
