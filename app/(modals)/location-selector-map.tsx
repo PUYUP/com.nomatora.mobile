@@ -274,14 +274,12 @@ export default function LocationSelectorMap() {
 	 */
 	const handleRegionDidChange = useCallback(
 		async (feature: GeoJSON.Feature<GeoJSON.Point>) => {
-			const wasUserDrag = isDraggingRef.current;
-			if (wasUserDrag) {
+			if (isDraggingRef.current) {
 				isDraggingRef.current = false;
 				animatePin(false);
 			}
 
-			const hasUserInitialized = hasInitialized.current;
-			if (hasUserInitialized) {
+			if (hasInitialized.current) {
 				hasInitialized.current = false;
 				return;
 			}
