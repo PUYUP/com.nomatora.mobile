@@ -242,6 +242,7 @@ export default function LocationSelectorMap() {
 		if (!isMounted.current) return;
 		setPlaceName(geocoded.ok ? geocoded.data.name : '');
 		setIsReverseGeocodingLoading(false);
+		setCenterCoords({ latitude, longitude });
 	}, []);
 
 	/**
@@ -253,6 +254,7 @@ export default function LocationSelectorMap() {
 			isDraggingRef.current = true;
 			animatePin(true);
 		}
+
 		// Cancel stale geo request while still dragging
 		if (geoDebounceRef.current) {
 			clearTimeout(geoDebounceRef.current);
@@ -272,18 +274,19 @@ export default function LocationSelectorMap() {
 	 */
 	const handleRegionDidChange = useCallback(
 		async (feature: GeoJSON.Feature<GeoJSON.Point>) => {
-			setIsReverseGeocodingLoading(true);
-
 			const wasUserDrag = isDraggingRef.current;
 			if (wasUserDrag) {
 				isDraggingRef.current = false;
 				animatePin(false);
 			}
 
-			if (!hasInitialized.current) {
-				setIsReverseGeocodingLoading(false);
+			const hasUserInitialized = hasInitialized.current;
+			if (hasUserInitialized) {
+				hasInitialized.current = false;
 				return;
 			}
+
+			setIsReverseGeocodingLoading(true);
 
 			// Extract center from the GeoJSON feature — [longitude, latitude]
 			const [longitude, latitude] = feature.geometry.coordinates;
