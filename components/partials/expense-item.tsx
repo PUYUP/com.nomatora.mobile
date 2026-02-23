@@ -1,21 +1,23 @@
 import { UX_ZERO_DECIMAL } from "@/constants/settings";
 import { ItemResponse, useUpdateItemMutation } from "@/redux/expense/expense-api";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const FONTS = {
-    regular: 'Inter_400Regular',
-    semiBold: 'Inter_600SemiBold',
-};
+    regular: "Inter_400Regular",
+    semiBold: "Inter_600SemiBold",
+} as const;
 
 const COLORS = {
-    surface: '#FFFFFF',
-    border: '#E5E5E5',
-    primaryText: '#1A1A1A',
-    secondaryText: '#666',
-    mutedText: 'gray',
-};
+    surface: "#FFFFFF",
+    border: "#E5E5E5",
+    primaryText: "#1A1A1A",
+    secondaryText: "#666",
+    mutedText: "gray",
+} as const;
 
 const SIZES = {
     cardRadius: 20,
@@ -23,7 +25,31 @@ const SIZES = {
     rowGap: 0,
     buttonSize: 36,
     quantitySpacing: 16,
-};
+} as const;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function buildCurrencyFormatter(
+    languageCode: string,
+    currencyCode: string
+): Intl.NumberFormat {
+    const isZeroDecimal = UX_ZERO_DECIMAL.includes(currencyCode);
+    const fractionDigits = isZeroDecimal
+        ? 0
+        : new Intl.NumberFormat(languageCode, {
+              style: "currency",
+              currency: currencyCode,
+          }).resolvedOptions().maximumFractionDigits;
+
+    return new Intl.NumberFormat(languageCode, {
+        style: "currency",
+        currency: currencyCode,
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+    });
+}
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ExpenseItemProps {
     item: ItemResponse | null;
@@ -33,91 +59,124 @@ interface ExpenseItemProps {
     onEdit?: (item: ItemResponse) => void;
 }
 
-export default function ExpenseItem({ item, currencyCode, languageCode, onRemove, onEdit }: ExpenseItemProps) {
-    if (!item) return null;
-    
-    const { id, name, category, price } = item;
-    const [quantity, setQuantity] = useState(item.quantity ?? 1);
-    const displayPrice = price;
-    const totalPrice = displayPrice * quantity;
+// ─── Component ───────────────────────────────────────────────────────────────
 
-    // currency formatter
-    const formatter = new Intl.NumberFormat(languageCode ?? 'en-US', {
-        style: "currency",
-        currency: currencyCode ?? 'USD',
-    });
-    const maximumFractionDigits = UX_ZERO_DECIMAL.includes(currencyCode ?? '') ? 0 : formatter.resolvedOptions().maximumFractionDigits;
-    const formattedPrice = new Intl.NumberFormat(languageCode ?? 'en-US', {
-        style: 'currency',
-        currency: currencyCode ?? 'USD',
-        minimumFractionDigits: maximumFractionDigits,
-        maximumFractionDigits: maximumFractionDigits
-    }).format(totalPrice);
+export default function ExpenseItem({
+    item,
+    currencyCode = "USD",
+    languageCode = "en-US",
+    onRemove,
+    onEdit,
+}: ExpenseItemProps) {
     const [updateItem] = useUpdateItemMutation();
+    const [quantity, setQuantity] = useState(item?.quantity ?? 1);
 
-    const handleDecrease = (id: string) => {
+    const formatter = useMemo(
+        () => buildCurrencyFormatter(languageCode, currencyCode),
+        [languageCode, currencyCode]
+    );
+
+    const handleDecrease = useCallback(() => {
+        if (!item) return;
         setQuantity((prev) => {
-            const newQuantity = prev > 1 ? prev - 1 : prev;
-            updateItem({ id: id, payload: { quantity: newQuantity } });
-            return newQuantity;
+            if (prev <= 1) return prev;
+            const next = prev - 1;
+            updateItem({ id: item.id, payload: { quantity: next } });
+            return next;
         });
-    };
+    }, [item, updateItem]);
 
-    const handleIncrease = (id: string) => {
+    const handleIncrease = useCallback(() => {
+        if (!item) return;
         setQuantity((prev) => {
-            const newQuantity = prev + 1;
-            updateItem({ id: id, payload: { quantity: newQuantity } });
-            return newQuantity;
+            const next = prev + 1;
+            updateItem({ id: item.id, payload: { quantity: next } });
+            return next;
         });
-    };
+    }, [item, updateItem]);
 
-    const handleRemove = (item: ItemResponse) => {
+    const handleRemove = useCallback(() => {
+        if (!item) return;
         Alert.alert(
             "Remove Item",
             "Are you sure you want to remove this item?",
             [
-                {
-                    text: "Cancel",
-                    style: "cancel"
-                },
+                { text: "Cancel", style: "cancel" },
                 {
                     text: "Remove",
+                    style: "destructive",
                     onPress: () => onRemove?.(item),
-                    style: "destructive"
-                }
+                },
             ]
         );
-    };
+    }, [item, onRemove]);
+
+    const handleEdit = useCallback(() => {
+        if (!item) return;
+        onEdit?.(item);
+    }, [item, onEdit]);
+
+    if (!item) return null;
+
+    const { name, category, category_name, price } = item;
+    const formattedTotal = formatter.format(price * quantity);
 
     return (
         <View style={styles.container}>
             <View style={styles.topRow}>
                 <View style={styles.detailsContainer}>
                     <Text style={styles.name}>{name}</Text>
-                    {category && <Text style={styles.category}>{item.category_name}</Text>}
+                    {category && (
+                        <Text style={styles.category}>{category_name}</Text>
+                    )}
                 </View>
-
-                <Text style={styles.price}>{currencyCode ? `${formattedPrice}` : `$${formattedPrice}`}</Text>
+                <Text style={styles.price}>{formattedTotal}</Text>
             </View>
 
             <View style={styles.bottomRow}>
                 <View style={styles.quantityContainer}>
-                    <TouchableOpacity onPress={() => handleDecrease(id)} style={[styles.quantityButton, { backgroundColor: 'lavenderblush'}]}>
+                    <TouchableOpacity
+                        onPress={handleDecrease}
+                        style={[styles.quantityButton, styles.decreaseButton]}
+                        accessibilityLabel="Decrease quantity"
+                        accessibilityRole="button"
+                    >
                         <MaterialCommunityIcons name="minus" size={18} color="#666" />
                     </TouchableOpacity>
+
                     <Text style={styles.quantityText}>{quantity}</Text>
-                    <TouchableOpacity onPress={() => handleIncrease(id)} style={[styles.quantityButton, { backgroundColor: 'honeydew'}]}>
+
+                    <TouchableOpacity
+                        onPress={handleIncrease}
+                        style={[styles.quantityButton, styles.increaseButton]}
+                        accessibilityLabel="Increase quantity"
+                        accessibilityRole="button"
+                    >
                         <MaterialCommunityIcons name="plus" size={18} color="#666" />
                     </TouchableOpacity>
                 </View>
 
                 <View style={styles.actionButtons}>
-                    <TouchableOpacity onPress={() => handleRemove(item)} style={styles.removeButton}>
+                    <TouchableOpacity
+                        onPress={handleRemove}
+                        style={styles.removeButton}
+                        accessibilityLabel={`Remove ${name}`}
+                        accessibilityRole="button"
+                    >
                         <Text style={styles.removeButtonText}>Remove</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => onEdit?.(item)} style={styles.editButton}>
-                        <MaterialCommunityIcons name="text-box-edit-outline" size={20} color="#666" />
+                    <TouchableOpacity
+                        onPress={handleEdit}
+                        style={styles.editButton}
+                        accessibilityLabel={`Edit ${name}`}
+                        accessibilityRole="button"
+                    >
+                        <MaterialCommunityIcons
+                            name="text-box-edit-outline"
+                            size={20}
+                            color="#666"
+                        />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -125,42 +184,39 @@ export default function ExpenseItem({ item, currencyCode, languageCode, onRemove
     );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
     container: {
-        backgroundColor: '#FCFCFC',
+        backgroundColor: "#FCFCFC",
         borderRadius: SIZES.cardRadius,
         padding: SIZES.cardPadding,
         borderWidth: 1,
         borderColor: COLORS.border,
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.075,
         shadowRadius: 1,
         elevation: 2,
     },
     topRow: {
-        flexDirection: 'row',
+        flexDirection: "row",
         marginBottom: SIZES.rowGap,
     },
     detailsContainer: {
         flex: 1,
-        justifyContent: 'center',
+        justifyContent: "center",
     },
     name: {
         fontSize: 17,
         color: COLORS.primaryText,
-        marginBottom: Platform.OS === 'ios' ? 3 : 0,
+        marginBottom: Platform.OS === "ios" ? 3 : 0,
         fontFamily: FONTS.semiBold,
     },
     category: {
         fontSize: 12,
         color: COLORS.mutedText,
         fontFamily: FONTS.semiBold,
-    },
-    subtitle: {
-        fontSize: 12,
-        color: COLORS.secondaryText,
-        fontFamily: FONTS.regular,
     },
     price: {
         fontSize: 16,
@@ -170,23 +226,28 @@ const styles = StyleSheet.create({
     },
     bottomRow: {
         paddingTop: 10,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
     },
     quantityContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
     },
     quantityButton: {
         width: SIZES.buttonSize,
         height: SIZES.buttonSize,
         borderRadius: SIZES.buttonSize / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems: "center",
+        justifyContent: "center",
         borderWidth: 1,
         borderColor: COLORS.border,
-        backgroundColor: COLORS.surface,
+    },
+    decreaseButton: {
+        backgroundColor: "lavenderblush",
+    },
+    increaseButton: {
+        backgroundColor: "honeydew",
     },
     quantityText: {
         fontSize: 16,
@@ -195,19 +256,9 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.regular,
     },
     actionButtons: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         marginLeft: 12,
-    },
-    editButton: {
-        width: SIZES.buttonSize,
-        height: SIZES.buttonSize,
-        borderRadius: SIZES.buttonSize / 2,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        backgroundColor: 'ivory',
     },
     removeButton: {
         padding: 8,
@@ -217,5 +268,15 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: COLORS.secondaryText,
         fontFamily: FONTS.semiBold,
+    },
+    editButton: {
+        width: SIZES.buttonSize,
+        height: SIZES.buttonSize,
+        borderRadius: SIZES.buttonSize / 2,
+        alignItems: "center",
+        justifyContent: "center",
+        borderWidth: 1,
+        borderColor: COLORS.border,
+        backgroundColor: "ivory",
     },
 });

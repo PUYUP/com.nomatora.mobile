@@ -94,7 +94,7 @@ export default function Home() {
                         purpose="expense"
                         initialLat={currentLocation ? currentLocation.latitude : 0}
                         initialLng={currentLocation ? currentLocation.longitude : 0}
-                        initialPlaceName="Jakarta"
+                        initialPlaceName=""
                         onConfirm={(loc) => console.log('confirmed', loc)}
                         places={places}
                         mapType={'terrain'}
