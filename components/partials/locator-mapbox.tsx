@@ -172,20 +172,27 @@ function makeLocationPlace(name: string, coords: LatLng): PlaceData {
 	};
 }
 
+/**
+ * Stable marker key derived from index and coordinates.
+ * We intentionally avoid float coords in keys — precision differences between
+ * renders (e.g. 1.23456789 vs 1.2345678900001) would cause unnecessary unmounts.
+ */
+function markerKey(index: number, coord: PlaceCoord): string {
+	return `place-${index}-${coord.latitude}-${coord.longitude}`;
+}
+
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
 function usePinAnimation() {
 	const pinScale = useRef(new Animated.Value(1)).current;
 	const pinTranslate = useRef(new Animated.Value(0)).current;
 
-	const animate = useCallback(
-		(dragging: boolean) => {
-			const config = { useNativeDriver: true, speed: 20, bounciness: 6 };
-			Animated.spring(pinScale, { toValue: dragging ? 1.1 : 1, ...config }).start();
-			Animated.spring(pinTranslate, { toValue: dragging ? -6 : 0, ...config }).start();
-		},
-		[pinScale, pinTranslate],
-	);
+	// Animated.Value refs are stable for the component lifetime — no deps needed.
+	const animate = useCallback((dragging: boolean) => {
+		const config = { useNativeDriver: true, speed: 20, bounciness: 6 };
+		Animated.spring(pinScale, { toValue: dragging ? 1.1 : 1, ...config }).start();
+		Animated.spring(pinTranslate, { toValue: dragging ? -6 : 0, ...config }).start();
+	}, []); // eslint-disable-line react-hooks/exhaustive-deps
 
 	return { pinScale, pinTranslate, animate };
 }
@@ -198,12 +205,15 @@ export const CustomMarker = ({
 	total,
 	onChangeLocation,
 	isDragMarkerVisible,
+	isDraggingRef,
 }: {
 	coord: PlaceCoord;
 	index: number;
 	total: number;
 	onChangeLocation: (coord: PlaceCoord) => void;
 	isDragMarkerVisible: boolean;
+	/** Ref so we can gate the press without needing a re-render cycle. */
+	isDraggingRef: React.MutableRefObject<boolean>;
 }) => {
 	if (!coord) return null;
 
@@ -220,6 +230,10 @@ export const CustomMarker = ({
 
 	useEffect(() => {
 		if (!isLast) return;
+		// Always start the animation when this marker becomes the last one.
+		// Removing isLast from deps would mean the animation never restarts
+		// if the marker is reused for a different position — keeping it here
+		// is correct; the cleanup stops the previous loop before a new one starts.
 		const anim = Animated.loop(
 			Animated.sequence([
 				Animated.timing(hereNowTranslate, { toValue: -6, duration: 1000, useNativeDriver: true }),
@@ -231,6 +245,12 @@ export const CustomMarker = ({
 	}, [hereNowTranslate, isLast]);
 
 	const markerStyle = isFirst ? styles.startMarker : isLast ? styles.endMarker : null;
+
+	const handleChangePress = useCallback(() => {
+		// Guard via ref — avoids a re-render just to disable the button
+		if (isDraggingRef.current) return;
+		onChangeLocation(coord);
+	}, [isDraggingRef, onChangeLocation, coord]);
 
 	return (
 		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]}>
@@ -249,7 +269,7 @@ export const CustomMarker = ({
 				>
 					<Animated.View style={{ transform: [{ translateY: hereNowTranslate }] }}>
 						<View style={styles.hereNowBadge}>
-							<TouchableOpacity onPress={() => onChangeLocation(coord)}>
+							<TouchableOpacity onPress={handleChangePress}>
 								<View style={styles.changeLocationButton}>
 									<MaterialCommunityIcons name="map-marker-radius" size={18} color="#333" />
 									<Text style={{ fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
@@ -293,12 +313,15 @@ export default function LocatorMapbox({
 	// ─── Refs ─────────────────────────────────────────────────────────────────
 	const isMounted = useRef(true);
 	const appState = useRef(AppState.currentState);
-	// Ref name reflects true purpose: debounce timer for revealing the drag pin
+	/** Debounce timer: reveals the drag pin 100ms after the first region change. */
 	const revealPinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const cameraRef = useRef<Mapbox.Camera | null>(null);
 	const lastCameraRef = useRef<{ center: LatLng; zoom: number } | null>(null);
-	const isProgrammaticMoveRef = useRef(false);
-	const ignoreRegionEventsUntilRef = useRef(0);
+	/**
+	 * Tracks whether the last region change originated from a finger gesture.
+	 * Using a ref (not state) so reads inside Mapbox callbacks are always fresh
+	 * without adding it to dep arrays or triggering re-renders.
+	 */
 	const isDraggingRef = useRef(false);
 
 	// ─── State ────────────────────────────────────────────────────────────────
@@ -311,7 +334,6 @@ export default function LocatorMapbox({
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
 	const [isDragMarkerVisible, setIsDragMarkerVisible] = useState(false);
-	const [isStarting, setIsStarting] = useState(false);
 	const [userLocation, setUserLocation] = useState<LatLng | null>(
 		() => parseLatLng(initialLat, initialLng),
 	);
@@ -325,8 +347,6 @@ export default function LocatorMapbox({
 				clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = null;
 			}
-			setOnSelecting(false);
-			setIsDragMarkerVisible(false);
 		};
 	}, []);
 
@@ -381,8 +401,6 @@ export default function LocatorMapbox({
 			setCameraZoom(zoom);
 			lastCameraRef.current = { center, zoom };
 			if (animationDuration > 0) {
-				isProgrammaticMoveRef.current = true;
-				ignoreRegionEventsUntilRef.current = Date.now() + animationDuration + 200;
 				cameraRef.current?.setCamera({
 					centerCoordinate: [center.longitude, center.latitude],
 					zoomLevel: zoom,
@@ -427,7 +445,7 @@ export default function LocatorMapbox({
 
 	/**
 	 * Updates the last entry in localPlaces with a "Selected location" pin.
-	 * Pass `snapTo` to override the coordinate (used when snapping back out-of-bounds).
+	 * Pass `snapTo` to override the coordinate (e.g. snapping back out-of-bounds).
 	 */
 	const updateSelectionPlace = useCallback(
 		(latitude: number, longitude: number, radius: number | null, snapTo?: LatLng) => {
@@ -448,7 +466,7 @@ export default function LocatorMapbox({
 		if (initial) {
 			applyCamera(initial);
 			broadcastLocation(initial.latitude, initial.longitude, initialPlaceName ?? '');
-			setIsLoading(false);
+			if (isMounted.current) setIsLoading(false);
 			return;
 		}
 
@@ -465,7 +483,6 @@ export default function LocatorMapbox({
 			applyCamera({ latitude: 0, longitude: 0 });
 		}
 
-		// FIX #6: guard setIsLoading against unmounted component
 		if (isMounted.current) setIsLoading(false);
 	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName]);
 
@@ -476,10 +493,15 @@ export default function LocatorMapbox({
 	}, [initializeLocationFlow]);
 
 	useEffect(() => {
-		if (!onSelecting) return;
-		const lastCoord = placeCoords[placeCoords.length - 1];
-		if (lastCoord) applyCamera({ latitude: lastCoord.latitude, longitude: lastCoord.longitude }, DEFAULT_ZOOM, 250);
-	}, [onSelecting]); // eslint-disable-line react-hooks/exhaustive-deps
+		// Only react to onSelecting toggling ON. userLocation is intentionally
+		// excluded — we don't want this effect to re-fire mid-session if the
+		// device GPS updates while the user is in the middle of selecting.
+		if (!onSelecting || !userLocation) return;
+		setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', userLocation)));
+		setHasUserRecentered(true);
+		applyCamera({ latitude: userLocation.latitude, longitude: userLocation.longitude }, 15.5, 250);
+		setIsDragMarkerVisible(true);
+	}, [onSelecting, userLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	useEffect(() => {
 		setLocalPlaces(places ?? []);
@@ -500,8 +522,6 @@ export default function LocatorMapbox({
 		if (!fitPlacesToMap || !cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
 		const lats = placeCoords.map((p) => p.latitude);
 		const lngs = placeCoords.map((p) => p.longitude);
-		isProgrammaticMoveRef.current = true;
-		ignoreRegionEventsUntilRef.current = Date.now() + 600;
 		cameraRef.current.fitBounds(
 			[Math.max(...lngs), Math.max(...lats)],
 			[Math.min(...lngs), Math.min(...lats)],
@@ -515,12 +535,12 @@ export default function LocatorMapbox({
 	const handleRegionIsChanging = useCallback(
 		(feature: Feature<Point>) => {
 			if (onSelecting) {
-				// FIX #1: setters are idempotent — no need to read state values in closure,
-				// which eliminates isDragMarkerVisible + isStarting from the dep array.
+				// Debounce: show the drag pin shortly after motion starts.
+				// setIsDragMarkerVisible(true) is idempotent so calling it
+				// repeatedly after the first reveal is safe and cheap.
 				if (revealPinTimerRef.current) clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = setTimeout(() => {
 					setIsDragMarkerVisible(true);
-					setIsStarting(false);
 					revealPinTimerRef.current = null;
 				}, 100);
 
@@ -533,27 +553,24 @@ export default function LocatorMapbox({
 				animatePin(true);
 			}
 		},
-		// FIX #1: isDragMarkerVisible and isStarting removed — setters are always stable
 		[onSelecting, getSelectionRadius, updateSelectionPlace, animatePin],
 	);
 
 	const handleRegionDidChange = useCallback(
 		async (feature: Feature<Point>) => {
-			// Consume the drag flag and reset pin animation
 			const wasUserDrag = isDraggingRef.current;
 			if (wasUserDrag) {
 				isDraggingRef.current = false;
 				animatePin(false);
 			}
 
-			// Clear any pending reveal-pin debounce — drag is fully done
+			// Clear any pending reveal debounce — motion has fully stopped
 			if (revealPinTimerRef.current) {
 				clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = null;
 			}
 
 			const isUserInteraction = feature.properties?.isUserInteraction;
-			// FIX #3: isRecentering is now in the dep array so this reads a fresh value
 			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecentering) return;
 
 			const [longitude, latitude] = feature.geometry.coordinates;
@@ -568,39 +585,31 @@ export default function LocatorMapbox({
 						zoomLevel: 15.5,
 						animationDuration: 50,
 					});
-					setIsDragMarkerVisible(true);
 					Alert.alert(
 						'Out of bounds',
 						`Please select a location within ${Math.round(resolvedRadiusCircle.radiusMeters)} meters of your current location.`,
 					);
 				} else {
 					const geocoded = await reverseGeocodeLocation(latitude, longitude);
-					if (geocoded.ok) broadcastLocation(latitude, longitude, geocoded.data.name);
+					if (isMounted.current && geocoded.ok) {
+						broadcastLocation(latitude, longitude, geocoded.data.name);
+					}
 				}
 			}
 		},
-		// FIX #3: isRecentering added to dep array — was a stale closure bug
 		[onSelecting, isRecentering, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin, updateSelectionPlace],
 	);
 
 	// ─── Controls ─────────────────────────────────────────────────────────────
 
 	const handleChangeLocation = useCallback(() => {
-		if (userLocation) {
-			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', userLocation)));
-			setHasUserRecentered(true);
-		}
-		setIsStarting(true);
 		setOnSelecting(true);
-		setIsDragMarkerVisible(true);
-		setTimeout(() => zoomBy(0.2, 50), 50);
-	}, [zoomBy, userLocation]);
+	}, []);
 
 	const handleCancelSelection = useCallback(() => {
 		setOnSelecting(false);
 		setIsDragMarkerVisible(false);
 		if (userLocation) {
-			// FIX #5: reset localPlaces last entry to a clean name (no stale radius text)
 			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Current location', userLocation)));
 			setHasUserRecentered(true);
 			applyCamera(userLocation, DEFAULT_ZOOM, 250);
@@ -620,6 +629,7 @@ export default function LocatorMapbox({
 		const { latitude, longitude } = location.data;
 		const geocoded = await reverseGeocodeLocation(latitude, longitude);
 		if (!isMounted.current) return;
+
 		const name = geocoded.ok ? geocoded.data.name : 'Current location';
 		const coords = { latitude, longitude };
 
@@ -652,7 +662,7 @@ export default function LocatorMapbox({
 							logoEnabled={false}
 							attributionEnabled={false}
 							scaleBarEnabled={false}
-							regionWillChangeDebounceTime={500}
+							regionWillChangeDebounceTime={0}
 							onRegionIsChanging={handleRegionIsChanging}
 							onRegionDidChange={handleRegionDidChange}
 							rotateEnabled
@@ -698,8 +708,7 @@ export default function LocatorMapbox({
 
 							{placeCoords.map((coord, index) => (
 								<MarkerView
-									key={`place-${coord.latitude}-${coord.longitude}-${index}`}
-									id={`place-${coord.latitude}-${coord.longitude}-${index}`}
+									key={markerKey(index, coord)}
 									coordinate={[coord.longitude, coord.latitude]}
 									anchor={{ x: 0.5, y: Platform.OS === 'ios' ? 0.85 : 1 }}
 								>
@@ -710,12 +719,13 @@ export default function LocatorMapbox({
 											total={placeCoords.length}
 											onChangeLocation={handleChangeLocation}
 											isDragMarkerVisible={isDragMarkerVisible}
+											isDraggingRef={isDraggingRef}
 										/>
 									</View>
 								</MarkerView>
 							))}
 
-							{placeCoords.length >= 2 && !isStarting && (
+							{placeCoords.length >= 2 && (
 								<ShapeSource
 									id="route"
 									shape={{
