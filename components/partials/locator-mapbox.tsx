@@ -8,10 +8,11 @@ import Mapbox, {
 	FillLayer,
 	LineLayer,
 	MapView as MapboxMapView,
+	MapState,
 	MarkerView,
 	ShapeSource,
 } from '@rnmapbox/maps';
-import type { Feature, GeoJsonProperties, Point, Polygon } from 'geojson';
+import type { Feature, GeoJsonProperties, Polygon } from 'geojson';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -532,8 +533,8 @@ export default function LocatorMapbox({
 
 	// ─── Map event handlers ───────────────────────────────────────────────────
 
-	const handleRegionIsChanging = useCallback(
-		(feature: Feature<Point>) => {
+	const handleCameraChanged = useCallback(
+		(state: MapState) => {
 			if (onSelecting) {
 				// Debounce: show the drag pin shortly after motion starts.
 				// setIsDragMarkerVisible(true) is idempotent so calling it
@@ -544,7 +545,7 @@ export default function LocatorMapbox({
 					revealPinTimerRef.current = null;
 				}, 100);
 
-				const [longitude, latitude] = feature.geometry.coordinates;
+				const [longitude, latitude] = state.properties.center;
 				updateSelectionPlace(latitude, longitude, getSelectionRadius(latitude, longitude));
 			}
 
@@ -556,8 +557,8 @@ export default function LocatorMapbox({
 		[onSelecting, getSelectionRadius, updateSelectionPlace, animatePin],
 	);
 
-	const handleRegionDidChange = useCallback(
-		async (feature: Feature<Point>) => {
+	const handleMapIdle = useCallback(
+		async (state: MapState) => {
 			const wasUserDrag = isDraggingRef.current;
 			if (wasUserDrag) {
 				isDraggingRef.current = false;
@@ -570,10 +571,10 @@ export default function LocatorMapbox({
 				revealPinTimerRef.current = null;
 			}
 
-			const isUserInteraction = feature.properties?.isUserInteraction;
+			const isUserInteraction = state.gestures?.isGestureActive || false;
 			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecentering) return;
 
-			const [longitude, latitude] = feature.geometry.coordinates;
+			const [longitude, latitude] = state.properties.center;
 			const radius = getSelectionRadius(latitude, longitude);
 
 			if (resolvedRadiusCircle && radius != null && userLocation) {
@@ -663,8 +664,8 @@ export default function LocatorMapbox({
 							attributionEnabled={false}
 							scaleBarEnabled={false}
 							regionWillChangeDebounceTime={0}
-							onRegionIsChanging={handleRegionIsChanging}
-							onRegionDidChange={handleRegionDidChange}
+							onCameraChanged={handleCameraChanged}
+							onMapIdle={handleMapIdle}
 							rotateEnabled
 							pitchEnabled
 							scrollEnabled

@@ -13,6 +13,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Mapbox, {
 	Camera,
 	MapView as MapboxMapView,
+	MapState,
 } from '@rnmapbox/maps';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import debounce from 'lodash.debounce';
@@ -247,9 +248,9 @@ export default function LocationSelectorMap() {
 
 	/**
 	 * Mapbox equivalent of react-native-maps onRegionChange.
-	 * onRegionIsChanging fires continuously while the user drags.
+	 * onCameraChanged fires continuously while the user drags.
 	 */
-	const handleRegionIsChanging = useCallback(() => {
+	const handleCameraChanged = useCallback(() => {
 		if (!isDraggingRef.current) {
 			isDraggingRef.current = true;
 			animatePin(true);
@@ -264,21 +265,22 @@ export default function LocationSelectorMap() {
 
 	/**
 	 * Mapbox equivalent of react-native-maps onRegionChangeComplete.
-	 * onRegionDidChange fires once the camera settles.
+	 * onMapIdle fires once the camera settles.
 	 *
 	 * Key difference from react-native-maps:
 	 *   - The feature payload carries the final center as GeoJSON Point coordinates
 	 *   - feature.properties.isUserInteraction distinguishes user drag vs programmatic move,
-	 *     but we use isDraggingRef (set in onRegionIsChanging) as the primary guard
+	 *     but we use isDraggingRef (set in onCameraChanged) as the primary guard
 	 *     because isUserInteraction can be false during inertia scroll (see earlier discussion).
 	 */
-	const handleRegionDidChange = useCallback(
-		async (feature: GeoJSON.Feature<GeoJSON.Point>) => {
+	const handleMapIdle = useCallback(
+		async (state: MapState) => {
 			if (isDraggingRef.current) {
 				isDraggingRef.current = false;
 				animatePin(false);
 			}
 
+			// Default location has already been set on mount — ignore the first region change event to avoid redundant reverse geocoding
 			if (hasInitialized.current) {
 				hasInitialized.current = false;
 				return;
@@ -287,7 +289,7 @@ export default function LocationSelectorMap() {
 			setIsReverseGeocodingLoading(true);
 
 			// Extract center from the GeoJSON feature — [longitude, latitude]
-			const [longitude, latitude] = feature.geometry.coordinates;
+			const [longitude, latitude] = state.properties.center;
 	
 			if (geoDebounceRef.current) clearTimeout(geoDebounceRef.current);
 			geoDebounceRef.current = setTimeout(() => {
@@ -483,8 +485,8 @@ export default function LocationSelectorMap() {
 									 *
 									 * Key API differences from react-native-maps:
 									 *   - No `initialRegion` prop — Camera component handles initial position
-									 *   - onRegionChange      → onRegionIsChanging
-									 *   - onRegionChangeComplete → onRegionDidChange
+									 *   - onRegionChange      → onCameraChanged
+									 *   - onRegionChangeComplete → onMapIdle
 									 *   - mapRef.animateToRegion() → cameraRef.setCamera()
 									 *   - No latitudeDelta/longitudeDelta — Mapbox uses zoom level
 									 */}
@@ -495,8 +497,8 @@ export default function LocationSelectorMap() {
 										attributionEnabled={false}
 										scaleBarEnabled={false}
 										regionWillChangeDebounceTime={0}
-										onRegionIsChanging={handleRegionIsChanging}
-										onRegionDidChange={handleRegionDidChange}
+										onCameraChanged={handleCameraChanged}
+										onMapIdle={handleMapIdle}
 										rotateEnabled={false}
 										pitchEnabled={false}
 										scrollEnabled
