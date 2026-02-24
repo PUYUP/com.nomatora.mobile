@@ -63,7 +63,7 @@ type ComponentProps = {
 	containerStyle?: StyleProp<ViewStyle>;
 	onConfirm?: (payload: ConfirmPayload) => void;
 	places?: PlaceData[];
-	fitPlacesToMap?: boolean;
+	fitBounds?: boolean;
 	controlPosition?: { top?: number; right?: number; bottom?: number; left?: number };
 	mapPadding?: MapPadding;
 	isSelecting?: boolean;
@@ -160,8 +160,9 @@ function parseLatLng(
 	return null;
 }
 
-/** Replaces the last element of an array immutably. */
+/** Replaces the last element of an array immutably. Appends if the array is empty. */
 function replaceLast<T>(arr: T[], item: T): T[] {
+	if (arr.length === 0) return [item];
 	return [...arr.slice(0, -1), item];
 }
 
@@ -231,10 +232,6 @@ export const CustomMarker = ({
 
 	useEffect(() => {
 		if (!isLast) return;
-		// Always start the animation when this marker becomes the last one.
-		// Removing isLast from deps would mean the animation never restarts
-		// if the marker is reused for a different position — keeping it here
-		// is correct; the cleanup stops the previous loop before a new one starts.
 		const anim = Animated.loop(
 			Animated.sequence([
 				Animated.timing(hereNowTranslate, { toValue: -6, duration: 1000, useNativeDriver: true }),
@@ -248,19 +245,16 @@ export const CustomMarker = ({
 	const markerStyle = isFirst ? styles.startMarker : isLast ? styles.endMarker : null;
 
 	const handleChangePress = useCallback(() => {
-		// Guard via ref — avoids a re-render just to disable the button
 		if (isDraggingRef.current) return;
 		onChangeLocation(coord);
 	}, [isDraggingRef, onChangeLocation, coord]);
 
 	return (
 		<View style={[styles.customMarker, markerStyle, isLast && styles.lastMarker]}>
-			{/* Hide image only when it's the last marker AND drag pin is active */}
 			{!(isLast && isDragMarkerVisible) && (
 				<Image source={asset} style={{ width: 40, height: 40 }} />
 			)}
 
-			{/* "Change" badge — only on last marker when drag pin is NOT active */}
 			{isLast && !isDragMarkerVisible && (
 				<View
 					style={[
@@ -301,7 +295,7 @@ export default function LocatorMapbox({
 	containerStyle,
 	onConfirm,
 	places,
-	fitPlacesToMap = true,
+	fitBounds = true,
 	controlPosition,
 	mapPadding,
 	isSelecting = false,
@@ -314,18 +308,37 @@ export default function LocatorMapbox({
 	// ─── Refs ─────────────────────────────────────────────────────────────────
 	const isMounted = useRef(true);
 	const appState = useRef(AppState.currentState);
-	/** Debounce timer: reveals the drag pin 100ms after the first region change. */
 	const revealPinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const cameraRef = useRef<Mapbox.Camera | null>(null);
 	const lastCameraRef = useRef<{ center: LatLng; zoom: number } | null>(null);
-	/**
-	 * Tracks whether the last region change originated from a finger gesture.
-	 * Using a ref (not state) so reads inside Mapbox callbacks are always fresh
-	 * without adding it to dep arrays or triggering re-renders.
-	 */
 	const isDraggingRef = useRef(false);
+	/**
+	 * Tracks in-flight geocode calls so a stale response from a previous idle
+	 * event cannot overwrite a newer one. Incremented each time handleMapIdle
+	 * kicks off a geocode; the callback checks its captured value still matches.
+	 */
+	const geocodeGenerationRef = useRef(0);
+	/**
+	 * Tracks in-flight initializeLocationFlow calls so that a backgrounded app
+	 * returning to foreground cancels any previous in-flight async chain.
+	 */
+	const initGenerationRef = useRef(0);
+	/**
+	 * Ref mirror of isRecentering so async callbacks always read the current
+	 * value without needing isRecentering in their dependency arrays (which
+	 * would cause stale-closure issues or unnecessary re-creation).
+	 */
+	const isRecenteringRef = useRef(false);
 
 	// ─── State ────────────────────────────────────────────────────────────────
+	const [isFitBounds, setIsFitBounds] = useState<boolean>(fitBounds);
+	// Ref mirror so handleCameraChanged can read the current value without
+	// being in its dep array (which would cause it to be recreated on every toggle).
+	const isFitBoundsRef = useRef(fitBounds);
+	const setIsFitBoundsSynced = useCallback((value: boolean) => {
+		isFitBoundsRef.current = value;
+		setIsFitBounds(value);
+	}, []);
 	const [onSelecting, setOnSelecting] = useState(isSelecting);
 	const [cameraCenter, setCameraCenter] = useState<LatLng | null>(null);
 	const [cameraZoom, setCameraZoom] = useState(DEFAULT_ZOOM);
@@ -334,6 +347,11 @@ export default function LocatorMapbox({
 	const [localPlaces, setLocalPlaces] = useState<PlaceData[]>(places ?? []);
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
+	// Keep ref mirror in sync — updated synchronously before any re-render.
+	const setIsRecenteringSynced = useCallback((value: boolean) => {
+		isRecenteringRef.current = value;
+		setIsRecentering(value);
+	}, []);
 	const [isDragMarkerVisible, setIsDragMarkerVisible] = useState(false);
 	const [userLocation, setUserLocation] = useState<LatLng | null>(
 		() => parseLatLng(initialLat, initialLng),
@@ -444,10 +462,6 @@ export default function LocatorMapbox({
 		[initialLat, initialLng, userLocation],
 	);
 
-	/**
-	 * Updates the last entry in localPlaces with a "Selected location" pin.
-	 * Pass `snapTo` to override the coordinate (e.g. snapping back out-of-bounds).
-	 */
 	const updateSelectionPlace = useCallback(
 		(latitude: number, longitude: number, radius: number | null, snapTo?: LatLng) => {
 			const radiusText = radius ? ` (±${Math.round(radius)}m)` : '';
@@ -461,30 +475,38 @@ export default function LocatorMapbox({
 	// ─── Location flow ────────────────────────────────────────────────────────
 
 	const initializeLocationFlow = useCallback(async () => {
+		// Invalidate any previous in-flight init. Each call captures its own
+		// generation; if a newer call starts before this one finishes, the
+		// isMounted checks below will still pass (component is mounted) but
+		// we'd overwrite fresh state with stale data. The generation counter
+		// prevents that.
+		const generation = ++initGenerationRef.current;
+		const isCurrent = () => isMounted.current && initGenerationRef.current === generation;
+
 		setIsLoading(true);
 
 		const initial = parseLatLng(initialLat, initialLng);
 		if (initial) {
 			applyCamera(initial);
 			broadcastLocation(initial.latitude, initial.longitude, initialPlaceName ?? '');
-			if (isMounted.current) setIsLoading(false);
+			if (isCurrent()) setIsLoading(false);
 			return;
 		}
 
 		const location = await getCurrentLocation();
-		if (!isMounted.current) return;
+		if (!isCurrent()) return;
 
 		if (location.ok) {
 			const { latitude, longitude } = location.data;
 			applyCamera({ latitude, longitude });
 			const geocoded = await reverseGeocodeLocation(latitude, longitude);
-			if (!isMounted.current) return;
+			if (!isCurrent()) return;
 			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
 		} else {
 			applyCamera({ latitude: 0, longitude: 0 });
 		}
 
-		if (isMounted.current) setIsLoading(false);
+		if (isCurrent()) setIsLoading(false);
 	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName]);
 
 	// ─── Effects ──────────────────────────────────────────────────────────────
@@ -494,9 +516,6 @@ export default function LocatorMapbox({
 	}, [initializeLocationFlow]);
 
 	useEffect(() => {
-		// Only react to onSelecting toggling ON. userLocation is intentionally
-		// excluded — we don't want this effect to re-fire mid-session if the
-		// device GPS updates while the user is in the middle of selecting.
 		if (!onSelecting || !userLocation) return;
 		setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', userLocation)));
 		setHasUserRecentered(true);
@@ -520,7 +539,10 @@ export default function LocatorMapbox({
 	}, [initializeLocationFlow]);
 
 	useEffect(() => {
-		if (!fitPlacesToMap || !cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
+		// Only re-fit when fit-bounds mode is explicitly ON and we have enough
+		// info. The isFitBounds check is the primary guard — when OFF, the
+		// placeCoords / mapLayout changes must not silently move the camera.
+		if (!isFitBounds || !cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
 		const lats = placeCoords.map((p) => p.latitude);
 		const lngs = placeCoords.map((p) => p.longitude);
 		cameraRef.current.fitBounds(
@@ -529,23 +551,29 @@ export default function LocatorMapbox({
 			40,
 			400,
 		);
-	}, [fitPlacesToMap, placeCoords, mapLayout.width, mapLayout.height]);
+		// Sync the ref in case the effect ran before setIsFitBoundsSynced could.
+		isFitBoundsRef.current = isFitBounds;
+	}, [isFitBounds, placeCoords, mapLayout.width, mapLayout.height]);
 
 	// ─── Map event handlers ───────────────────────────────────────────────────
 
 	const handleCameraChanged = useCallback(
 		(state: MapState) => {
+			// Always keep lastCameraRef in sync with the real camera position so
+			// that zoomBy() reads a fresh zoom level regardless of how the camera moved.
+			const [longitude, latitude] = state.properties.center;
+			lastCameraRef.current = {
+				center: { latitude, longitude },
+				zoom: state.properties.zoom,
+			};
+
 			if (onSelecting) {
-				// Debounce: show the drag pin shortly after motion starts.
-				// setIsDragMarkerVisible(true) is idempotent so calling it
-				// repeatedly after the first reveal is safe and cheap.
 				if (revealPinTimerRef.current) clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = setTimeout(() => {
 					setIsDragMarkerVisible(true);
 					revealPinTimerRef.current = null;
 				}, 100);
 
-				const [longitude, latitude] = state.properties.center;
 				updateSelectionPlace(latitude, longitude, getSelectionRadius(latitude, longitude));
 			}
 
@@ -553,8 +581,16 @@ export default function LocatorMapbox({
 				isDraggingRef.current = true;
 				animatePin(true);
 			}
+
+			// Only disable fit-bounds when the user is actively gesturing.
+			// Programmatic moves (fitBounds animation, applyCamera, zoom buttons)
+			// also fire onCameraChanged — we must NOT clear the flag for those,
+			// or toggling fit-bounds ON would immediately turn itself back OFF.
+			if (isFitBoundsRef.current && state.gestures?.isGestureActive) {
+				setIsFitBoundsSynced(false);
+			}
 		},
-		[onSelecting, getSelectionRadius, updateSelectionPlace, animatePin],
+		[onSelecting, getSelectionRadius, updateSelectionPlace, animatePin, setIsFitBoundsSynced],
 	);
 
 	const handleMapIdle = useCallback(
@@ -565,21 +601,29 @@ export default function LocatorMapbox({
 				animatePin(false);
 			}
 
-			// Clear any pending reveal debounce — motion has fully stopped
 			if (revealPinTimerRef.current) {
 				clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = null;
 			}
 
 			const isUserInteraction = state.gestures?.isGestureActive || false;
-			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecentering) return;
+			// Use ref for isRecentering — reading state here would capture a stale
+			// closure value from when the callback was last created.
+			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecenteringRef.current) return;
 
 			const [longitude, latitude] = state.properties.center;
 			const radius = getSelectionRadius(latitude, longitude);
 
+			// Stamp this geocode call so a stale response from a previous idle
+			// event cannot overwrite the result of a newer one.
+			const generation = ++geocodeGenerationRef.current;
+			const isCurrent = () => isMounted.current && geocodeGenerationRef.current === generation;
+
 			if (resolvedRadiusCircle && radius != null && userLocation) {
 				if (radius > resolvedRadiusCircle.radiusMeters) {
-					// Out of bounds — snap camera back to user location
+					// Out of bounds — snap camera back to user location.
+					// Do this synchronously before the alert so the map moves
+					// immediately rather than after the user dismisses the dialog.
 					updateSelectionPlace(latitude, longitude, radius, userLocation);
 					cameraRef.current?.setCamera({
 						centerCoordinate: [userLocation.longitude, userLocation.latitude],
@@ -592,13 +636,19 @@ export default function LocatorMapbox({
 					);
 				} else {
 					const geocoded = await reverseGeocodeLocation(latitude, longitude);
-					if (isMounted.current && geocoded.ok) {
+					if (isCurrent() && geocoded.ok) {
 						broadcastLocation(latitude, longitude, geocoded.data.name);
 					}
 				}
+			} else if (!resolvedRadiusCircle && onSelecting) {
+				// No radius constraint — still geocode and broadcast the new location.
+				const geocoded = await reverseGeocodeLocation(latitude, longitude);
+				if (isCurrent() && geocoded.ok) {
+					broadcastLocation(latitude, longitude, geocoded.data.name);
+				}
 			}
 		},
-		[onSelecting, isRecentering, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin, updateSelectionPlace],
+		[onSelecting, getSelectionRadius, resolvedRadiusCircle, userLocation, broadcastLocation, animatePin, updateSelectionPlace],
 	);
 
 	// ─── Controls ─────────────────────────────────────────────────────────────
@@ -619,17 +669,25 @@ export default function LocatorMapbox({
 	}, [userLocation, applyCamera, broadcastLocation]);
 
 	const recenterToUserLocation = useCallback(async () => {
-		setIsRecentering(true);
+		setIsFitBoundsSynced(false);
+		setIsRecenteringSynced(true);
 		const location = await getCurrentLocation();
-		if (!isMounted.current) return;
+		if (!isMounted.current) {
+			// Component unmounted mid-flight — clean up ref so future mounts start fresh.
+			isRecenteringRef.current = false;
+			return;
+		}
 		if (!location.ok) {
-			setIsRecentering(false);
+			setIsRecenteringSynced(false);
 			return;
 		}
 
 		const { latitude, longitude } = location.data;
 		const geocoded = await reverseGeocodeLocation(latitude, longitude);
-		if (!isMounted.current) return;
+		if (!isMounted.current) {
+			isRecenteringRef.current = false;
+			return;
+		}
 
 		const name = geocoded.ok ? geocoded.data.name : 'Current location';
 		const coords = { latitude, longitude };
@@ -641,8 +699,30 @@ export default function LocatorMapbox({
 		setUserLocation(coords);
 		setOnSelecting(false);
 		setIsDragMarkerVisible(false);
-		setIsRecentering(false);
-	}, [applyCamera, broadcastLocation]);
+		setIsRecenteringSynced(false);
+	}, [applyCamera, broadcastLocation, setIsRecenteringSynced, setIsFitBoundsSynced]);
+
+	/**
+	 * Toggles fit-bounds mode.
+	 * - Turning ON  → immediately fires fitBounds on the camera so all markers
+	 *   are framed without waiting for the next placeCoords change.
+	 * - Turning OFF → leaves the camera where it is; the user can pan freely.
+	 */
+	const fitToBoundsHandler = useCallback(() => {
+		const next = !isFitBoundsRef.current;
+		setIsFitBoundsSynced(next);
+
+		if (next && cameraRef.current && placeCoords.length && mapLayout.width && mapLayout.height) {
+			const lats = placeCoords.map((p) => p.latitude);
+			const lngs = placeCoords.map((p) => p.longitude);
+			cameraRef.current.fitBounds(
+				[Math.max(...lngs), Math.max(...lats)],
+				[Math.min(...lngs), Math.min(...lats)],
+				40,
+				400,
+			);
+		}
+	}, [placeCoords, mapLayout, setIsFitBoundsSynced]);
 
 	// ─── Render ───────────────────────────────────────────────────────────────
 
@@ -653,10 +733,6 @@ export default function LocatorMapbox({
 			<View style={styles.page}>
 				<View style={styles.mapCard}>
 					<View style={styles.mapWrapper}>
-						{/*
-						 * mapRef intentionally omitted — not needed for current functionality.
-						 * Re-add if getVisibleBounds() or queryRenderedFeatures() is required.
-						 */}
 						<MapboxMapView
 							style={styles.map}
 							styleURL={mapStyleUrl}
@@ -780,6 +856,25 @@ export default function LocatorMapbox({
 							<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
 								<MaterialCommunityIcons name="minus" size={26} />
 							</TouchableOpacity>
+
+							{/* ── Fit-bounds toggle ── */}
+							<TouchableOpacity
+								style={[
+									styles.zoomButton,
+									isFitBounds && styles.zoomButtonActive,
+									!placeCoords.length && styles.zoomButtonDisabled,
+								]}
+								onPress={fitToBoundsHandler}
+								disabled={!placeCoords.length}
+								activeOpacity={0.7}
+							>
+								<MaterialCommunityIcons
+									name="map-marker-path"
+									size={26}
+									color={isFitBounds ? '#fff' : '#333'}
+								/>
+							</TouchableOpacity>
+
 							<TouchableOpacity
 								style={[styles.zoomButton, { opacity: isRecentering || onSelecting ? 0.5 : 1 }]}
 								onPress={recenterToUserLocation}
@@ -861,6 +956,15 @@ const styles = StyleSheet.create({
 		shadowOpacity: 0.16,
 		shadowRadius: 4,
 		elevation: 4,
+	},
+	/** Active state: filled blue background to show fit-bounds is ON. */
+	zoomButtonActive: {
+		backgroundColor: '#1382fe',
+		borderColor: '#1382fe',
+	},
+	/** Disabled state: muted appearance when there are no markers to fit. */
+	zoomButtonDisabled: {
+		opacity: 0.4,
 	},
 	mutedText: { opacity: 0.7, fontSize: 12 },
 	customMarker: {

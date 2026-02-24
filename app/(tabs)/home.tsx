@@ -101,8 +101,8 @@ export default function Home() {
                                 initialPlaceName=""
                                 onConfirm={(loc) => console.log('confirmed', loc)}
                                 places={places}
-                                mapType={'terrain'}
-                                fitPlacesToMap={false}
+                                mapType={'standard'}
+                                fitBounds={false}
                                 controlPosition={{ top: insets.top + 16, right: 16 }}
                                 mapPadding={{ bottom: 0, top: 0, right: 0, left: 0 }}
                                 isSelecting={false}
