@@ -5,13 +5,14 @@ import { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Carousel from "react-native-reanimated-carousel";
 import { DashedLine } from '../ui/dashed-line';
+import { SignalBar } from './signal-bar';
 
 const SAMPLES: SlidePointData[] = [
     {
         latitude: -6.1993066979615294,
         longitude: 106.80059008229979,
         title: 'Makan sate di Monas bareng Vetel',
-        type: 'poi',
+        type: 'expense',
         description: 'Monumen Nasional, ikon Jakarta',
         placeName: 'Gambir, Central Jakarta',
         arrivedAt: '2026-02-23T08:00:00Z',
@@ -19,16 +20,44 @@ const SAMPLES: SlidePointData[] = [
     {
         latitude: -6.197749445570561,
         longitude: 106.79634146318625,
-        title: 'Sate Khas Senayan',
-        type: 'restaurant',
+        title: 'Cilok',
+        type: 'geoprice',
         description: 'Restoran sate legendaris',
         placeName: 'Jl. Asia Afrika, Senayan',
         arrivedAt: '2026-02-23T09:00:00Z',
+        meta: {
+            price: 15000,
+            currency: 'IDR',
+            items: [
+                { name: 'Cilok original', price: 7000 },
+                { name: 'Cilok keju', price: 8000 },
+                { name: 'Cilok pedas', price: 9000 },
+                { name: 'Cilok bakar', price: 10000 },
+                { name: 'Cilok isi daging', price: 12000 },
+                { name: 'Cilok isi sosis', price: 11000 },
+            ],
+        }
     },
     {
         latitude: -6.197749445570561,
         longitude: 106.79634146318625,
-        title: 'Restoran sate legendaris',
+        title: 'Air es kelapa',
+        type: 'geoprice',
+        description: 'Restoran sate legendaris',
+        placeName: 'Jl. Asia Afrika, Senayan',
+        arrivedAt: '2026-02-23T09:00:00Z',
+        meta: {
+            price: 10000,
+            currency: 'IDR',
+            items: [ 
+                { name: 'Air es kelapa', price: 10000 },
+            ],
+        }
+    },
+    {
+        latitude: -6.197749445570561,
+        longitude: 106.79634146318625,
+        title: 'Jl. Asia Afrika, Senayan',
         type: 'expense',
         description: 'Restoran sate legendaris',
         placeName: 'Jl. Asia Afrika, Senayan',
@@ -37,10 +66,18 @@ const SAMPLES: SlidePointData[] = [
     {
         latitude: -6.193994955085802,
         longitude: 106.7940562211111,
-        title: 'Plaza Senayan',
-        type: 'mall',
+        title: 'tangkuban perahu senja bersama vetel',
+        type: 'story',
         placeName: 'Jl. Asia Afrika, Senayan',
         arrivedAt: '2026-02-23T10:00:00Z',
+    },
+    {
+        latitude: -6.165428708566159,
+        longitude: 106.78182152873754,
+        title: '87 dBm',
+        type: 'network',
+        placeName: 'Senayan, Jakarta',
+        arrivedAt: '2026-02-23T12:00:00Z',
     },
     {
         latitude: -6.183765966320194,
@@ -50,14 +87,6 @@ const SAMPLES: SlidePointData[] = [
         description: 'Stasiun KRL Palmerah',
         placeName: 'Jl. Palmerah Utara',
         arrivedAt: '2026-02-23T11:00:00Z',
-    },
-    {
-        latitude: -6.165428708566159,
-        longitude: 106.78182152873754,
-        title: 'Gelora Bung Karno',
-        type: 'stadium',
-        placeName: 'Senayan, Jakarta',
-        arrivedAt: '2026-02-23T12:00:00Z',
     },
     {
         latitude: -6.207360786794562,
@@ -94,13 +123,10 @@ const data: SlideItem[] = [
     { type: 'destination' }, // item terakhir
 ];
 
-const RenderPlaceholder = () => {
-    const [containerWidth, setContainerWidth] = useState(0);
-    const ITEM_WIDTH = containerWidth / 2.15;
-
+const RenderPlaceholder = ({ height }: { height: number }) => {
     return (
-        <View onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)} style={styles.placeholderContainer}>
-            <View style={[styles.glassCard, styles.glassCardCentered, { height: (ITEM_WIDTH / 2) + 10 }]}>
+        <View style={styles.placeholderContainer}>
+            <View style={[styles.glassCard, styles.glassCardCentered, { height: height }]}>
                 <View style={styles.iconContainer}>
                     <MaterialCommunityIcons name="home-export-outline" size={32} style={styles.iconColor} />
                 </View>
@@ -120,12 +146,188 @@ const RenderPlaceholder = () => {
                 <DashedLine color="#fff" dashWidth={5} dashHeight={2} gap={4} />
             </View>
 
-            <View style={[styles.glassCard, { height: (ITEM_WIDTH / 2) + 10 }]}>
+            <View style={[styles.glassCard, { height: height }]}>
                 <Text style={styles.titleWhite}>Wandering...</Text>
                 <TouchableOpacity style={styles.setDestinationButton}>
-                    <Text>Set dest</Text>
+                    <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
                 </TouchableOpacity>
             </View>
+        </View>
+    )
+}
+
+/**
+ * Expense card
+ */
+const RenderExpenseCard = ({ slidePoint, width, height }: { slidePoint: SlidePointData; width: number; height: number }) => {
+    return (
+        <View style={styles.itemRow}>
+            <View style={[styles.glassCard, styles.glassCardPoint, { width: width, height: height }]}>
+                <View style={styles.headerRow}>
+                    <Text style={[styles.title, styles.titleBold, styles.titleLarge, styles.headerTitle]} numberOfLines={2}>
+                        {slidePoint.title}
+                    </Text>
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="food-fork-drink" size={20} color="#fff" />
+                    </View>
+                </View>
+                
+                <View style={styles.cardFooter}>
+                    <View style={styles.metaBlock}>
+                        <Text style={[styles.title, styles.titleSmall, styles.titleBold]} numberOfLines={1}>Rp 345.000</Text>
+                    </View>
+
+                    {slidePoint.arrivedAt && (
+                        <Text style={styles.title}>
+                            {formatDate(new Date(slidePoint.arrivedAt), 'd MMM yy, HH:mm')}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            <TouchableOpacity style={styles.slipInPoint}>
+                <MaterialCommunityIcons name="plus" size={22} />
+            </TouchableOpacity>
+        </View>
+    )
+}
+
+/**
+ * Story card
+ */
+const RenderStoryCard = ({ slidePoint, width, height }: { slidePoint: SlidePointData; width: number; height: number }) => {
+    return (
+        <View style={styles.itemRow}>
+            <View style={[styles.glassCard, styles.glassCardPoint, { width: width, height: height }]}>
+                <View style={styles.headerRow}>
+                    <Text style={[styles.title, styles.titleBold, styles.titleLarge, styles.headerTitle]} numberOfLines={2}>
+                        {slidePoint.title}
+                    </Text>
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="draw-pen" size={20} color="#fff" />
+                    </View>
+                </View>
+                
+                <View style={styles.cardFooter}>
+                    <View style={styles.metaBlock}>
+                        <View style={styles.metaItem}>
+                            <MaterialCommunityIcons name="image-multiple" size={16} color="#fff" />
+                            <Text style={[styles.title, styles.titleSmall]} numberOfLines={1}>3</Text>
+                        </View>
+
+                        <View style={styles.metaItem}>
+                            <MaterialCommunityIcons name="video-box" size={16} color="#fff" />
+                            <Text style={[styles.title, styles.titleSmall]} numberOfLines={1}>50 min</Text>
+                        </View>
+                    </View>
+
+                    {slidePoint.arrivedAt && (
+                        <Text style={styles.title}>
+                            {formatDate(new Date(slidePoint.arrivedAt), 'd MMM yy, HH:mm')}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            <TouchableOpacity style={styles.slipInPoint}>
+                <MaterialCommunityIcons name="plus" size={22} />
+            </TouchableOpacity>
+        </View>
+    )
+}
+
+/**
+ * Network card
+ */
+const RenderNetworkCard = ({ slidePoint, width, height }: { slidePoint: SlidePointData; width: number; height: number }) => {
+    return (
+        <View style={styles.itemRow}>
+            <View style={[styles.glassCard, styles.glassCardPoint, { width: width, height: height }]}>
+                <View style={styles.headerRow}>
+                    <View style={{ flex: 1 }}>
+                        <SignalBar rawStrength={1} />
+                    </View>
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="antenna" size={20} color="#fff" />
+                    </View>
+                </View>
+                
+                <View style={styles.cardFooter}>
+                    <View style={styles.metaBlock}>
+                        <Text style={[styles.title, styles.titleBold]}>Telkomsel</Text>
+                    </View>
+
+                    {slidePoint.arrivedAt && (
+                        <Text style={styles.title}>
+                            {formatDate(new Date(slidePoint.arrivedAt), 'd MMM yy, HH:mm')}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            <TouchableOpacity style={styles.slipInPoint}>
+                <MaterialCommunityIcons name="plus" size={22} />
+            </TouchableOpacity>
+        </View>
+    )
+}
+
+/**
+ * Geo price card
+ */
+const RenderGeoPriceCard = ({ slidePoint, width, height }: { slidePoint: SlidePointData; width: number; height: number }) => {
+    return (
+        <View style={styles.itemRow}>
+            <View style={[styles.glassCard, styles.glassCardPoint, { width: width, height: height }]}>
+                <View style={styles.headerRow}>
+                    {slidePoint.meta?.items?.length <= 1 && (
+                        <Text style={[styles.title, styles.titleBold, styles.titleLarge]} numberOfLines={2}>{slidePoint.title}</Text>
+                    )}
+
+                    {slidePoint.meta?.items?.length > 1 && (
+                        <View style={{ width: '80%' }}>
+                            {slidePoint?.meta?.items?.slice(0, 2).map((item: any, index: number) => (
+                                <View key={index}>
+                                    <Text style={[styles.title, styles.titleBold, styles.titleLarge]} numberOfLines={1}>{item.name}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    <View style={styles.headerIcon}>
+                        <MaterialCommunityIcons name="tag-text" size={20} color="#fff" />
+                    </View>
+                </View>
+                
+                <View style={styles.cardFooter}>
+                    {slidePoint.meta?.items?.length <= 1 && (
+                        <View style={styles.metaBlock}>
+                            <Text style={[styles.title, styles.titleSmall, styles.titleBold]} numberOfLines={1}>
+                                Rp {slidePoint.meta?.price?.toLocaleString('id-ID')}
+                            </Text>
+                        </View>
+                    )}
+                    
+                    {slidePoint.meta?.items?.length > 1 && (
+                        <View style={styles.metaBlock}>
+                            <View style={styles.metaItem}>
+                                <MaterialCommunityIcons name="invoice-list-outline" size={16} color="#fff" />
+                                <Text style={[styles.title, styles.titleSmall]} numberOfLines={1}>3 items</Text>
+                            </View>
+                        </View>
+                    )}
+
+                    {slidePoint.arrivedAt && (
+                        <Text style={styles.title}>
+                            {formatDate(new Date(slidePoint.arrivedAt), 'd MMM yy, HH:mm')}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            <TouchableOpacity style={styles.slipInPoint}>
+                <MaterialCommunityIcons name="plus" size={22} />
+            </TouchableOpacity>
         </View>
     )
 }
@@ -134,18 +336,22 @@ export function SlidePoints() {
     const [containerWidth, setContainerWidth] = useState(0);
     const ITEM_WIDTH = containerWidth / 2.15;
     const PEEK_RIGHT = ITEM_WIDTH * 0.5;
+    const width = ITEM_WIDTH + 34; // for carousel width
+    const cardWidth = ITEM_WIDTH - 10;
+    const cardHeight = (ITEM_WIDTH / 2) + 16;
 
     return (
         <View onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-            {containerWidth > 0 && data.length > 3 && (
+            {containerWidth > 0 && data.length > 2 && (
                 <Carousel
                     loop={false}
                     snapEnabled
                     pagingEnabled={false}
                     data={data}
-                    width={ITEM_WIDTH + 34}
-                    height={(ITEM_WIDTH / 2) + 10}
-                    maxScrollDistancePerSwipe={ITEM_WIDTH + 34}
+                    width={width}
+                    height={cardHeight}
+                    maxScrollDistancePerSwipe={width}
+                    onSnapToItem={(index) => console.log("current index:", index)}
                     withAnimation={{
                         type: 'spring',
                         config: {
@@ -160,10 +366,13 @@ export function SlidePoints() {
                         overflow: 'visible',
                     }}
                     renderItem={({ item, index }) => {
+                        // variable
+                        const slidePoint = item as SlidePointData;
+
                         if ('type' in item && item.type === 'origin') {
                             return (
                                 <View style={styles.itemRow}>
-                                    <View style={[styles.glassCard, styles.glassCardCentered, styles.glassCardFixed, { height: (ITEM_WIDTH / 2) + 10 }]}>
+                                    <View style={[styles.glassCard, styles.glassCardCentered, styles.glassCardFixed, { height: cardHeight }]}>
                                         <View style={styles.iconContainer}>
                                             <MaterialCommunityIcons name="home-export-outline" size={32} style={styles.iconColor} />
                                         </View>
@@ -189,20 +398,43 @@ export function SlidePoints() {
                                         <DashedLine color="#fff" dashWidth={5} dashHeight={2} gap={4} />
                                     </View>
 
-                                    <View style={[styles.glassCard, styles.glassCardFixed, { height: (ITEM_WIDTH / 2) + 10 }]}>
+                                    <View style={[styles.glassCard, styles.glassCardFixed, { height: cardHeight }]}>
                                         <Text style={styles.titleWhite}>Wandering...</Text>
                                         <TouchableOpacity style={styles.setDestinationButton}>
-                                            <Text>Set dest</Text>
+                                            <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </View>
                             );
                         }
 
-                        const slidePoint = item as SlidePointData;
+                        if ('type' in item && item.type === 'expense') {
+                            return (
+                                <RenderExpenseCard slidePoint={slidePoint} width={cardWidth} height={cardHeight} />
+                            );
+                        }
+
+                        if ('type' in item && item.type === 'geoprice') {
+                            return (
+                                <RenderGeoPriceCard slidePoint={slidePoint} width={cardWidth} height={cardHeight} />
+                            );
+                        }
+
+                        if ('type' in item && item.type === 'story') {
+                            return (
+                                <RenderStoryCard slidePoint={slidePoint} width={cardWidth} height={cardHeight} />
+                            );
+                        }
+
+                        if ('type' in item && item.type === 'network') {
+                            return (
+                                <RenderNetworkCard slidePoint={slidePoint} width={cardWidth} height={cardHeight} />
+                            );
+                        }
+
                         return (
                             <View style={styles.itemRow}>
-                                <View style={[styles.glassCard, styles.glassCardPoint, { width: ITEM_WIDTH - 10, height: (ITEM_WIDTH / 2) + 10 }]}>
+                                <View style={[styles.glassCard, styles.glassCardPoint, { width: cardWidth, height: cardHeight }]}>
                                     <Text style={[styles.title, styles.titleBold, styles.titleLarge]} numberOfLines={2}>{slidePoint.title}</Text>
                                     <View style={styles.cardFooter}>
                                         <View style={styles.metaBlock}>
@@ -231,12 +463,11 @@ export function SlidePoints() {
                             </View>
                         )
                     }}
-                    onSnapToItem={(index) => console.log("current index:", index)}
                 />
             )}
 
             {data.length <= 3 && (
-                <RenderPlaceholder />
+                <RenderPlaceholder height={cardHeight} />
             )}
         </View>
     );
@@ -254,8 +485,6 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.25,
         shadowRadius: 4,
         elevation: 2,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.18)',
     },
     glassCardCentered: {
         justifyContent: 'center',
@@ -357,7 +586,7 @@ const styles = StyleSheet.create({
     setDestinationButton: {
         backgroundColor: '#fff',
         paddingVertical: 6,
-        paddingHorizontal: 12,
+        paddingHorizontal: 6,
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
@@ -374,4 +603,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 0,
     },
+
+    // Expense card
+    headerRow: {
+        flexDirection: 'row',
+    },
+    headerTitle: {
+        flex: 1,
+        paddingRight: 26,
+    },
+    headerIcon: {
+        width: 30,
+        height: 30,
+        borderRadius: 10,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'absolute',
+        top: -4,
+        right: -4,
+    }
 });

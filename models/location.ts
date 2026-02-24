@@ -29,5 +29,8 @@ export interface SlidePointData {
     placeName?: string
     description?: string
     arrivedAt?: string
-    type: 'expense' | 'origin' | 'destination' | 'poi' | 'restaurant' | 'mall' | 'station' | 'stadium' | 'beach' | 'park' | 'airport'
+    meta?: {
+        [key: string]: any
+    }
+    type: 'expense' | 'geoprice' | 'story' | 'network' | 'origin' | 'destination' | 'poi' | 'restaurant' | 'mall' | 'station' | 'stadium' | 'beach' | 'park' | 'airport'
 }

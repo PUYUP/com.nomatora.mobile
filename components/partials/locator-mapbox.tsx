@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
 		borderTopColor: 'white',
 	},
 	changeLocationButton: {
-		backgroundColor: '#ffd700',
+		backgroundColor: '#fffafa',
 		height: 32,
 		paddingHorizontal: 8,
 		borderRadius: 16,
@@ -937,7 +937,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 	},
 	cancelSelectionButton: {
-		backgroundColor: '#ffd700',
+		backgroundColor: '#f8f8ff',
 		paddingHorizontal: 6,
 		height: 36,
 		borderRadius: 20,

@@ -94,8 +94,8 @@ export default function Home() {
                     {currentLocation && (
                         <View style={{ flex: 1 }}>
                             <LocatorMapbox
-                                requestId="expense-location"
-                                purpose="expense"
+                                requestId="tracking-location"
+                                purpose="tracking"
                                 initialLat={currentLocation ? currentLocation.latitude : 0}
                                 initialLng={currentLocation ? currentLocation.longitude : 0}
                                 initialPlaceName=""
