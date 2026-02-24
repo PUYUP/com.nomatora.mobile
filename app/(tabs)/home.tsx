@@ -1,3 +1,4 @@
+import { JourneyStats } from "@/components/partials/journey-stats";
 import LocatorMapbox from "@/components/partials/locator-mapbox";
 import { SlidePoints } from "@/components/partials/slide-points";
 import { getCurrentLocation } from "@/libs/location";
@@ -112,15 +113,32 @@ export default function Home() {
                     )}
                 </View>
 
+                <View style={[styles.statsContainer, { top: insets.top + 16 }]}>
+                    <JourneyStats />
+                </View>
+
                 <View style={[styles.slidePointContainer, { bottom: insets.bottom + 90 }]}>
                     <SlidePoints />
                 </View>
 
                 <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.25)']}
+                    colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.1)', 'transparent']}
                     style={{
                         position: 'absolute',
-                        height: 300,
+                        height: 50,
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        zIndex: 120, // ✅ lebih tinggi dari map (115)
+                        pointerEvents: 'none', // ✅ agar tidak block touch event
+                    }}
+                />
+
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.15)']}
+                    style={{
+                        position: 'absolute',
+                        height: 240,
                         left: 0,
                         right: 0,
                         bottom: 0,
@@ -140,6 +158,14 @@ const styles = StyleSheet.create({
         left: 0,
         right: 0,
         paddingHorizontal: 16,
-        zIndex: 130, // ✅ lebih tinggi dari gradient (120)
-    }
+        zIndex: 130,
+    },
+    statsContainer: {
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        right: 16,
+        zIndex: 130,
+        width: '70%',
+    },
 });

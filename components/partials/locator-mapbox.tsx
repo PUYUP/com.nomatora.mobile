@@ -951,11 +951,7 @@ const styles = StyleSheet.create({
 		borderRadius: 18,
 		alignItems: 'center',
 		justifyContent: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.16,
-		shadowRadius: 4,
-		elevation: 4,
+		boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.16)',
 	},
 	/** Active state: filled blue background to show fit-bounds is ON. */
 	zoomButtonActive: {
@@ -988,11 +984,7 @@ const styles = StyleSheet.create({
 		elevation: 3,
 		alignItems: 'center',
 		justifyContent: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.25,
-		shadowRadius: 3.84,
-		zIndex: 10,
+		boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.25)',
 	},
 	hereNowArrowWrapper: {
 		marginTop: -2,

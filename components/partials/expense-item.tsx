@@ -193,11 +193,7 @@ const styles = StyleSheet.create({
         padding: SIZES.cardPadding,
         borderWidth: 1,
         borderColor: COLORS.border,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.075,
-        shadowRadius: 1,
-        elevation: 2,
+        boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.075)',
     },
     topRow: {
         flexDirection: "row",

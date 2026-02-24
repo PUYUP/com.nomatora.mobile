@@ -539,8 +539,6 @@ const styles = StyleSheet.create({
     scanLine: {
         height: SCAN_LINE_HEIGHT,
         backgroundColor: "#22c55e",
-        shadowColor: "#22c55e",
-        shadowOpacity: 0.8,
-        shadowRadius: 6,
+        boxShadow: '0px 2px 4px 0px rgba(34, 197, 94, 0.8)',
     },
 });
