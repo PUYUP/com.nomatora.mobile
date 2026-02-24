@@ -1,108 +1,168 @@
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { LinearGradient } from 'expo-linear-gradient';
+import * as NavigationBar from 'expo-navigation-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const styles = StyleSheet.create({
   tabItem: {
-    flexDirection: 'column',
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    minWidth: 100,
     display: 'flex',
   },
   tabItemContainer: {
     backgroundColor: '#f5f5dc',
-    borderRadius: 22,
-    paddingVertical: 6,
+    paddingVertical: 4,
     shadowColor: '#000',
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.16,
 		shadowRadius: 4,
 		elevation: 4,
-  },
-  iconSlot: {
-    width: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
-  label: {
-    fontSize: 12,
-    textAlign: 'center',
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-  },
+  nofticationBadge: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#dc143c',
+    justifyContent: 'center',
+    alignItems: 'center',
+    top: -4,
+    right: -4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 4,
+  }
 });
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-	const renderTab = (label: string, icon: string, focused: boolean) => {
-		const tint = focused ? '#2f4f4f' : '#708090';
-    const bgColor = focused ? '#FFF' : '#f5f5f5';
-		return (
-			<View style={styles.tabItem}>
-        <View style={[styles.tabItemContainer, { backgroundColor: bgColor }]}>
-          <View style={styles.iconSlot}>
-            <MaterialCommunityIcons size={28} name={icon as any} color={tint} />
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
+
+  const tabs = [
+    { name: 'index', label: 'Home', icon: 'home' },
+    { name: 'explore', label: 'Explore', icon: 'globe-model' },
+    { name: 'home', label: 'Track', icon: 'vector-point-select' },
+    { name: 'notification', label: 'Alert', icon: 'bell' },
+  ];
+
+  return (
+    <View style={{
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: 'transparent',
+      paddingTop: 10,
+      paddingBottom: insets.bottom + 26,
+      paddingHorizontal: 16,
+      height: 50 + insets.bottom,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-start',
+      gap: 12,  // ← jarak antar tab
+    }}>
+      {state.routes.map((route: any, index: number) => {
+        const tab = tabs.find(t => t.name === route.name);
+        if (!tab) return null;
+
+        const focused = state.index === index;
+        const tint = focused ? '#2f4f4f' : '#708090';
+        const bgColor = focused ? 'rgba(255,255,255,0.9)' : 'rgba(245,245,220,0.85)';
+
+        // Sisipkan node kustom SEBELUM tab ke-2 (index 2), atau sesuaikan posisinya
+        const customNode = index === 2 ? (
+          <View key="checkin-node" style={{ flex: 1, position: 'relative', zIndex: 17 }}>
+            <TouchableOpacity style={{
+              height: 46, 
+              borderRadius: 23,
+              backgroundColor: '#2f4f4f', 
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 6,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.16,
+              shadowRadius: 4,
+              elevation: 4,
+            }}>
+              <MaterialCommunityIcons name="map-plus" size={20} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 14 }}>Check In</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={[styles.label, { color: tint }]}>{label}</Text>
-        </View>
-			</View>
-		);
-	};
+        ) : null;
+
+        return (
+          <React.Fragment key={route.key}>
+            {customNode}
+            <TouchableOpacity
+              onPress={() => {
+                const event = navigation.emit({
+                  type: 'tabPress',
+                  target: route.key,
+                  canPreventDefault: true,
+                });
+                if (!focused && !event.defaultPrevented) {
+                  navigation.navigate(route.name);
+                }
+              }}
+              style={{ position: 'relative', zIndex: 17 }}
+            >
+              <View style={[
+                styles.tabItemContainer,
+                { backgroundColor: bgColor },
+              ]}>
+                <MaterialCommunityIcons
+                  size={24}
+                  name={tab.icon as any}
+                  color={tint}
+                />
+
+                {tab.name === 'notification' && (
+                  <View style={styles.nofticationBadge}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>5</Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+export default function TabLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      // Set the navigation bar style
+      NavigationBar.setStyle('dark');
+    }
+  }, []);
 
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarShowLabel: false,
-        tabBarButton: HapticTab,
-        tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: 'transparent',
-          borderTopWidth: 0,
-          elevation: 0,
-          height: 106,
-          paddingTop: 24,
-        },
-        tabBarItemStyle: {
-          flex: 1,
-          backgroundColor: 'transparent',
-        },
-        tabBarBackground: () => (
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.25)']}
-            style={{ height: 106 }}
-          />
-        ),
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused }) => renderTab('Home', 'home', focused),
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ focused }) => renderTab('Explore', 'globe-model', focused),
-        }}
-      />
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: 'Track',
-          tabBarIcon: ({ focused }) => renderTab('Track', 'vector-point-select', focused),
-        }}
-      />
+      }}
+    >
+      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
+      <Tabs.Screen name="home" options={{ title: 'Track' }} />
+      <Tabs.Screen name="notification" options={{ title: 'Alert' }} />
     </Tabs>
   );
 }

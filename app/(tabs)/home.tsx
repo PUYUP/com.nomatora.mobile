@@ -1,6 +1,8 @@
 import LocatorMapbox from "@/components/partials/locator-mapbox";
+import { SlidePoints } from "@/components/partials/slide-points";
 import { getCurrentLocation } from "@/libs/location";
 import { CoordsData, PlaceData } from "@/models/location";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -86,43 +88,58 @@ export default function Home() {
     }, []);
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['left', 'right']}>
-            <View style={{ flex: 1 }}>
-                {currentLocation && (
-                    <LocatorMapbox
-                        requestId="expense-location"
-                        purpose="expense"
-                        initialLat={currentLocation ? currentLocation.latitude : 0}
-                        initialLng={currentLocation ? currentLocation.longitude : 0}
-                        initialPlaceName=""
-                        onConfirm={(loc) => console.log('confirmed', loc)}
-                        places={places}
-                        mapType={'terrain'}
-                        fitPlacesToMap={false}
-                        controlPosition={{ top: insets.top + 16, right: 16 }}
-                        mapPadding={{ bottom: 0, top: 0, right: 0, left: 0 }}
-                        isSelecting={false}
-                        radiusCircle={{ radiusMeters: 250 }}
-                    />
-                )}
-            </View>
-        </SafeAreaView>
+        <>
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }} edges={['left', 'right']}>
+                <View style={{ flex: 1 }}>
+                    {currentLocation && (
+                        <View style={{ flex: 1 }}>
+                            <LocatorMapbox
+                                requestId="expense-location"
+                                purpose="expense"
+                                initialLat={currentLocation ? currentLocation.latitude : 0}
+                                initialLng={currentLocation ? currentLocation.longitude : 0}
+                                initialPlaceName=""
+                                onConfirm={(loc) => console.log('confirmed', loc)}
+                                places={places}
+                                mapType={'terrain'}
+                                fitPlacesToMap={false}
+                                controlPosition={{ top: insets.top + 16, right: 16 }}
+                                mapPadding={{ bottom: 0, top: 0, right: 0, left: 0 }}
+                                isSelecting={false}
+                                radiusCircle={{ radiusMeters: 250 }}
+                            />
+                        </View>
+                    )}
+                </View>
+
+                <View style={[styles.slidePointContainer, { bottom: insets.bottom + 90 }]}>
+                    <SlidePoints />
+                </View>
+
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.25)']}
+                    style={{
+                        position: 'absolute',
+                        height: 300,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 120, // ✅ lebih tinggi dari map (115)
+                        pointerEvents: 'none', // ✅ agar tidak block touch event
+                    }}
+                />
+            </SafeAreaView>
+        </>
     );
 }
 
 const styles = StyleSheet.create({
-    backgroundBottom: {
+    slidePointContainer: {
         position: 'absolute',
+        bottom: 16,
         left: 0,
         right: 0,
-        bottom: 0,
-        height: '40%',
-    },
-    backgroundTop: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: 0,
-        height: '10%',
-    },
+        paddingHorizontal: 16,
+        zIndex: 130, // ✅ lebih tinggi dari gradient (120)
+    }
 });

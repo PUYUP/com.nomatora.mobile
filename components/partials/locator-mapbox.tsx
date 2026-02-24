@@ -764,7 +764,7 @@ export default function LocatorMapbox({
 
 								<View style={styles.cancelSelectionContainer}>
 									<TouchableOpacity style={styles.cancelSelectionButton} onPress={handleCancelSelection}>
-										<MaterialCommunityIcons name="close-circle" size={20} color="#333" />
+										<MaterialCommunityIcons name="close-circle" size={18} color="#333" />
 										<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>
 											Cancel
 										</Text>
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
 	},
 	hereNowBadge: {
 		backgroundColor: 'white',
-		padding: 4,
+		padding: 3,
 		borderRadius: 30,
 		elevation: 3,
 		alignItems: 'center',
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
 		borderTopColor: 'white',
 	},
 	changeLocationButton: {
-		backgroundColor: '#9acd32',
+		backgroundColor: '#ffd700',
 		height: 32,
 		paddingHorizontal: 8,
 		borderRadius: 16,
@@ -930,7 +930,8 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		left: 0,
 		right: 0,
-		top: '38%',
+		top: '50%',
+		transform: [{ translateY: -106 }],
 		zIndex: 999,
 		justifyContent: 'center',
 		alignItems: 'center',
@@ -938,15 +939,17 @@ const styles = StyleSheet.create({
 	cancelSelectionButton: {
 		backgroundColor: '#ffd700',
 		paddingHorizontal: 6,
-		paddingVertical: 6,
+		height: 36,
 		borderRadius: 20,
 		alignItems: 'center',
 		justifyContent: 'center',
-		shadowColor: '#000',
 		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.25,
-		shadowRadius: 3.84,
+		shadowOpacity: 0.16,
+		shadowRadius: 4,
+		elevation: 4,
 		flexDirection: 'row',
 		gap: 6,
+		borderWidth: 3,
+		borderColor: '#fff',
 	},
 });

@@ -28,8 +28,7 @@ import {
 	Text,
 	TextInput,
 	TouchableOpacity,
-	TouchableWithoutFeedback,
-	View,
+	View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -407,179 +406,178 @@ export default function LocationSelectorMap() {
 	// ─── Render ───────────────────────────────────────────────────────────────
 
 	return (
-		<TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-			<SafeAreaView style={styles.safeArea} edges={['bottom']}>
-				<Stack.Screen
-					options={{
-						headerTitle: `Select ${purposeLabel}`,
-						headerTitleStyle: {
-							fontSize: 20,
-							fontFamily: 'ZalandoSansExpanded_900Black',
-							color: '#1F3D2B',
-						},
-						headerLeft: (props) => <HeaderBackButton {...props} />,
-					}}
+		<SafeAreaView style={styles.safeArea} edges={['bottom']}>
+			<Stack.Screen
+				options={{
+					headerTitle: `Select ${purposeLabel}`,
+					headerTitleStyle: {
+						fontSize: 20,
+						fontFamily: 'ZalandoSansExpanded_900Black',
+						color: '#1F3D2B',
+					},
+					headerLeft: (props) => <HeaderBackButton {...props} />,
+				}}
+			/>
+
+			{showPermissionBlock ? (
+				<PermissionBlock
+					isRequesting={isRequestingPermission}
+					isLocationNotEnabled={isLocationNotEnabled}
+					permissionError={permissionError}
+					onOpenSettings={handleOpenAppSettings}
+					onRefresh={initializeLocationFlow}
 				/>
+			) : (
+				<View style={styles.page}>
+					{/* Search bar */}
+					<View style={styles.searchBar}>
+						<TextInput
+							placeholder="Search places..."
+							value={searchPlace}
+							onChangeText={placeSearchHandler}
+							style={styles.placeSearchInput}
+						/>
+						{searchPlace.length > 0 && (
+							<TouchableOpacity
+								onPress={clearSearchHandler}
+								style={styles.clearButton}
+								accessibilityLabel="Clear search"
+							>
+								<MaterialCommunityIcons name="close" size={22} />
+							</TouchableOpacity>
+						)}
+						{isSearchingPlaces && (
+							<ActivityIndicator size="small" style={styles.searchSpinner} />
+						)}
+					</View>
 
-				{showPermissionBlock ? (
-					<PermissionBlock
-						isRequesting={isRequestingPermission}
-						isLocationNotEnabled={isLocationNotEnabled}
-						permissionError={permissionError}
-						onOpenSettings={handleOpenAppSettings}
-						onRefresh={initializeLocationFlow}
-					/>
-				) : (
-					<View style={styles.page}>
-						{/* Search bar */}
-						<View style={styles.searchBar}>
-							<TextInput
-								placeholder="Search places..."
-								value={searchPlace}
-								onChangeText={placeSearchHandler}
-								style={styles.placeSearchInput}
+					{placesResults.length > 0 && (
+						<View style={styles.resultDialog}>
+							<FlatList
+								data={placesResults}
+								keyExtractor={placeKeyExtractor}
+								style={styles.placesList}
+								renderItem={renderPlaceItem}
+								keyboardShouldPersistTaps="handled"
 							/>
-							{searchPlace.length > 0 && (
-								<TouchableOpacity
-									onPress={clearSearchHandler}
-									style={styles.clearButton}
-									accessibilityLabel="Clear search"
-								>
-									<MaterialCommunityIcons name="close" size={22} />
-								</TouchableOpacity>
-							)}
-							{isSearchingPlaces && (
-								<ActivityIndicator size="small" style={styles.searchSpinner} />
-							)}
 						</View>
+					)}
 
-						{placesResults.length > 0 && (
-							<View style={styles.resultDialog}>
-								<FlatList
-									data={placesResults}
-									keyExtractor={placeKeyExtractor}
-									style={styles.placesList}
-									renderItem={renderPlaceItem}
-									keyboardShouldPersistTaps="handled"
-								/>
+					{/* Map */}
+					<View style={styles.mapCard}>
+						{isLoading || !cameraCenter ? (
+							<View style={styles.mapLoading}>
+								<ActivityIndicator size="small" />
+								<Text style={styles.mutedText}>Loading map…</Text>
+							</View>
+						) : (
+							<View style={styles.mapWrapper}>
+								<View style={styles.mapHint}>
+									<Text style={styles.hintText}>Drag the map to place the pin.</Text>
+								</View>
+
+								{/*
+									* MapboxMapView is always mounted (never conditionally unmounted)
+									* to avoid "Could not find view with tag" native errors.
+									* The loading overlay above gates visibility instead.
+									*
+									* Key API differences from react-native-maps:
+									*   - No `initialRegion` prop — Camera component handles initial position
+									*   - onRegionChange      → onCameraChanged
+									*   - onRegionChangeComplete → onMapIdle
+									*   - mapRef.animateToRegion() → cameraRef.setCamera()
+									*   - No latitudeDelta/longitudeDelta — Mapbox uses zoom level
+									*/}
+								<MapboxMapView
+									onPress={() => Keyboard.dismiss()} 
+									style={styles.map}
+									styleURL={Mapbox.StyleURL.Street}
+									logoEnabled={false}
+									attributionEnabled={false}
+									scaleBarEnabled={false}
+									regionWillChangeDebounceTime={0}
+									onCameraChanged={handleCameraChanged}
+									onMapIdle={handleMapIdle}
+									rotateEnabled
+									pitchEnabled
+									scrollEnabled
+									zoomEnabled
+								>
+									<Camera
+										ref={cameraRef}
+										centerCoordinate={[cameraCenter.longitude, cameraCenter.latitude]}
+										zoomLevel={cameraZoom}
+										animationDuration={0}
+									/>
+								</MapboxMapView>
+
+								{/* Center pin — positioned absolutely over map center */}
+								<View style={styles.centerMarker} pointerEvents="none">
+									<Animated.View
+										style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}
+									>
+										<View style={{ width: 40, height: 64 }}>
+											<MapMarker width={40} height={64} />
+										</View>
+									</Animated.View>
+									<View style={styles.centerGlow}>
+										<AnimatedOval />
+									</View>
+								</View>
+
+								<View style={styles.zoomControls}>
+									<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
+										<MaterialCommunityIcons name="plus" size={26} />
+									</TouchableOpacity>
+									<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
+										<MaterialCommunityIcons name="minus" size={26} />
+									</TouchableOpacity>
+								</View>
 							</View>
 						)}
+					</View>
 
-						{/* Map */}
-						<View style={styles.mapCard}>
-							{isLoading || !cameraCenter ? (
-								<View style={styles.mapLoading}>
-									<ActivityIndicator size="small" />
-									<Text style={styles.mutedText}>Loading map…</Text>
-								</View>
-							) : (
-								<View style={styles.mapWrapper}>
-									<View style={styles.mapHint}>
-										<Text style={styles.hintText}>Drag the map to place the pin.</Text>
-									</View>
-
-									{/*
-									 * MapboxMapView is always mounted (never conditionally unmounted)
-									 * to avoid "Could not find view with tag" native errors.
-									 * The loading overlay above gates visibility instead.
-									 *
-									 * Key API differences from react-native-maps:
-									 *   - No `initialRegion` prop — Camera component handles initial position
-									 *   - onRegionChange      → onCameraChanged
-									 *   - onRegionChangeComplete → onMapIdle
-									 *   - mapRef.animateToRegion() → cameraRef.setCamera()
-									 *   - No latitudeDelta/longitudeDelta — Mapbox uses zoom level
-									 */}
-									<MapboxMapView
-										style={styles.map}
-										styleURL={Mapbox.StyleURL.Street}
-										logoEnabled={false}
-										attributionEnabled={false}
-										scaleBarEnabled={false}
-										regionWillChangeDebounceTime={0}
-										onCameraChanged={handleCameraChanged}
-										onMapIdle={handleMapIdle}
-										rotateEnabled={false}
-										pitchEnabled={false}
-										scrollEnabled
-										zoomEnabled
-									>
-										<Camera
-											ref={cameraRef}
-											centerCoordinate={[cameraCenter.longitude, cameraCenter.latitude]}
-											zoomLevel={cameraZoom}
-											animationDuration={0}
-										/>
-									</MapboxMapView>
-
-									{/* Center pin — positioned absolutely over map center */}
-									<View style={styles.centerMarker} pointerEvents="none">
-										<Animated.View
-											style={{ transform: [{ scale: pinScale }, { translateY: pinTranslate }] }}
-										>
-											<View style={{ width: 40, height: 64 }}>
-												<MapMarker width={40} height={64} />
-											</View>
-										</Animated.View>
-										<View style={styles.centerGlow}>
-											<AnimatedOval />
-										</View>
-									</View>
-
-									<View style={styles.zoomControls}>
-										<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(0.5)}>
-											<MaterialCommunityIcons name="plus" size={26} />
-										</TouchableOpacity>
-										<TouchableOpacity style={styles.zoomButton} onPress={() => zoomBy(2)}>
-											<MaterialCommunityIcons name="minus" size={26} />
-										</TouchableOpacity>
-									</View>
-								</View>
-							)}
+					{/* Meta info */}
+					<View style={styles.metaBlock}>
+						<View style={[styles.metaRow, styles.metaRowPadded]}>
+							<MaterialCommunityIcons name="map-marker-radius-outline" size={26} color="#6b7280" />
+							<Text style={styles.metaText} numberOfLines={2}>
+								{placeName || '-'}
+							</Text>
 						</View>
-
-						{/* Meta info */}
-						<View style={styles.metaBlock}>
-							<View style={[styles.metaRow, styles.metaRowPadded]}>
-								<MaterialCommunityIcons name="map-marker-radius-outline" size={26} color="#6b7280" />
-								<Text style={styles.metaText} numberOfLines={2}>
-									{placeName || '-'}
-								</Text>
+						<View style={styles.metaRow}>
+							<MaterialCommunityIcons name="crosshairs-gps" size={26} color="#6b7280" />
+							<View style={styles.coordsRow}>
+								<Text style={styles.coordsText}>{centerCoords?.latitude}</Text>
+								<Text style={styles.coordsTextComma}>,</Text>
+								<Text style={styles.coordsText}>{centerCoords?.longitude}</Text>
 							</View>
-							<View style={styles.metaRow}>
-								<MaterialCommunityIcons name="crosshairs-gps" size={26} color="#6b7280" />
-								<View style={styles.coordsRow}>
-									<Text style={styles.coordsText}>{centerCoords?.latitude}</Text>
-									<Text style={styles.coordsTextComma}>,</Text>
-									<Text style={styles.coordsText}>{centerCoords?.longitude}</Text>
-								</View>
-							</View>
-						</View>
-
-						{/* Actions */}
-						<View style={styles.actionsRow}>
-							<TouchableOpacity style={styles.secondaryButton} onPress={router.back}>
-								<Text style={styles.secondaryButtonText}>Cancel</Text>
-							</TouchableOpacity>
-							<TouchableOpacity
-								style={[
-									styles.primaryButton,
-									(!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled,
-								]}
-								onPress={handleConfirm}
-								disabled={!centerCoords || isReverseGeocodingLoading}
-							>
-								{!centerCoords || isReverseGeocodingLoading ? (
-									<ActivityIndicator color="#fff" />
-								) : (
-									<Text style={styles.primaryButtonText}>Confirm</Text>
-								)}
-							</TouchableOpacity>
 						</View>
 					</View>
-				)}
-			</SafeAreaView>
-		</TouchableWithoutFeedback>
+
+					{/* Actions */}
+					<View style={styles.actionsRow}>
+						<TouchableOpacity style={styles.secondaryButton} onPress={router.back}>
+							<Text style={styles.secondaryButtonText}>Cancel</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[
+								styles.primaryButton,
+								(!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled,
+							]}
+							onPress={handleConfirm}
+							disabled={!centerCoords || isReverseGeocodingLoading}
+						>
+							{!centerCoords || isReverseGeocodingLoading ? (
+								<ActivityIndicator color="#fff" />
+							) : (
+								<Text style={styles.primaryButtonText}>Confirm</Text>
+							)}
+						</TouchableOpacity>
+					</View>
+				</View>
+			)}
+		</SafeAreaView>
 	);
 }
 

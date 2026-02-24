@@ -21,3 +21,13 @@ export interface PlaceData {
         }
     }
 }
+
+export interface SlidePointData {
+    latitude: number
+    longitude: number
+    title: string
+    placeName?: string
+    description?: string
+    arrivedAt?: string
+    type: 'expense' | 'origin' | 'destination' | 'poi' | 'restaurant' | 'mall' | 'station' | 'stadium' | 'beach' | 'park' | 'airport'
+}
