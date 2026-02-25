@@ -2,9 +2,10 @@ import LocatorMapbox from "@/components/partials/locator-mapbox";
 import { SlidePoints } from "@/components/partials/slide-points";
 import { getCurrentLocation } from "@/libs/location";
 import { CoordsData, PlaceData } from "@/models/location";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Home() {
@@ -117,7 +118,12 @@ export default function Home() {
                 </View> */}
 
                 <View style={[styles.titleContainer, { top: insets.top + 16 }]}>
-                    <Text style={styles.title}>Nomatora</Text>
+                    <Text style={styles.subtitle} numberOfLines={2}>
+                        Jalan ke Kabupaten Kerinci 
+                    </Text>
+                    <TouchableOpacity style={styles.settingsButton}>
+                        <MaterialCommunityIcons name="cog" size={20} />
+                    </TouchableOpacity>
                 </View>
 
                 <View style={[styles.slidePointContainer, { bottom: insets.bottom + 90 }]}>
@@ -177,16 +183,33 @@ const styles = StyleSheet.create({
         left: 16,
         right: 'auto',
         zIndex: 230,
-        alignItems: 'center',
-        justifyContent: 'center',
+        maxWidth: '70%',
         backgroundColor: 'rgba(255,255,255,0.85)',
-        height: 36,
+        minHeight: 36,
         paddingHorizontal: 12,
-        borderRadius: 20,
+        paddingRight: 8,
+        paddingVertical: 6,
+        borderRadius: 12,
         boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.16)',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
     },
     title: {
-        fontSize: 22,
+        fontSize: 20,
         fontFamily: "ZalandoSansExpanded_900Black",
-    }
+    },
+    subtitle: {
+        color: '#333',
+        fontSize: 14,
+        width: '85%',
+    },
+    settingsButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

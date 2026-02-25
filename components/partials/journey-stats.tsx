@@ -3,20 +3,45 @@ import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native
 
 export function JourneyStats() {
     const data = [
-        { id: '1', title: 'Start', value: '12 Des 2025', icon: 'calendar-today' },
-        { id: '2', title: 'End', value: '12 Des 2025', icon: 'calendar-check' },
-        { id: '3', title: 'Distances', value: '293.4 km', icon: 'map-marker-distance' },
-        { id: '4', title: 'Time', value: '5h 32m', icon: 'clock-outline' },
-        { id: '5', title: 'Expense (452 itm)', value: 'Rp 584.000.353', icon: 'currency-usd' },
         { id: '6', title: 'Geo Prices', value: '1.252', icon: 'tag-text' },
+        { id: '10', title: 'Signals', value: '74', icon: 'antenna' },
         { id: '7', title: 'Photos', value: '464', icon: 'folder-image' },
         { id: '8', title: 'Video', value: '464', icon: 'video-box' },
         { id: '9', title: 'Stories', value: '893', icon: 'draw-pen' },
-        { id: '10', title: 'Signals', value: '74', icon: 'antenna' },
     ];
 
     return (
         <View style={styles.container}>
+            <View style={styles.expense}>
+                <Text style={styles.expenseTitle}>Expense for 173 items</Text>
+                <Text style={styles.expenseValue}>Rp 584.000.353</Text>
+            </View>
+
+            <View style={styles.timeline}>
+                <View style={styles.timelineBlock}>
+                    <View style={styles.timelineHeader}>
+                        <MaterialCommunityIcons name="calendar-today" size={20} />
+                        <Text style={styles.expenseTitle}>From</Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={styles.timelineValue}>26 Dec 2025</Text>
+                        <Text style={[styles.timelineValue, { fontWeight: 'normal', color: '#666' }]}>&bull;</Text>
+                        <Text style={[styles.timelineValue, { fontWeight: 'normal', color: '#666' }]}>To</Text>
+                        <Text style={styles.timelineValue}>16 Jan 2026</Text>
+                    </View>
+                </View>
+
+                <View style={[styles.timelineBlock]}>
+                    <View style={styles.timelineHeader}>
+                        <MaterialCommunityIcons name="map-marker-path" size={20} />
+                        <Text style={styles.expenseTitle}>5d 17h</Text>
+                    </View>
+
+                    <Text style={styles.timelineValue}>293.4 km</Text>
+                </View>
+            </View>
+
             <FlatList
                 data={data}
                 renderItem={({item}) => (
@@ -73,4 +98,45 @@ export const styles = StyleSheet.create({
         fontSize: 30,
         color: '#2f4f4f',
     },
+
+    /* expense */
+    expense: {
+        padding: 16,
+        borderBottomWidth: 1,
+        borderColor: '#d3d3d3',
+        marginBottom: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    expenseTitle: {
+        fontSize: 15,
+        color: '#666',
+        marginBottom: 4,
+    },
+    expenseValue: {
+        fontSize: 26,
+        fontWeight: '700',
+        color: '#1A1A1A',
+    },
+
+    /* timeline */
+    timeline: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 24,
+        marginBottom: 26,
+    },
+    timelineBlock: {
+        
+    },
+    timelineHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginBottom: 4,
+    },
+    timelineValue: {
+        fontWeight: '700',
+        fontSize: 15,
+    }
 });
