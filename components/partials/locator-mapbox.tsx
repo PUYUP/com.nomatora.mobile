@@ -12,6 +12,7 @@ import Mapbox, {
 	MarkerView,
 	ShapeSource,
 } from '@rnmapbox/maps';
+import { useRouter } from 'expo-router';
 import type { Feature, GeoJsonProperties, Polygon } from 'geojson';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -259,17 +260,28 @@ export const CustomMarker = ({
 				<View
 					style={[
 						styles.hereNowGroup,
-						{ transform: [{ translateX: Platform.OS === 'ios' ? -50 : -52 }] },
+						{ transform: [{ translateX: Platform.OS === 'ios' ? -48 : -50 }] },
 					]}
 				>
 					<Animated.View style={{ transform: [{ translateY: hereNowTranslate }] }}>
 						<View style={styles.hereNowBadge}>
 							<TouchableOpacity onPress={handleChangePress}>
 								<View style={styles.changeLocationButton}>
-									<MaterialCommunityIcons name="map-marker-radius" size={18} color="#333" />
 									<Text style={{ fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
 										Change
 									</Text>
+								</View>		
+
+								<View style={{ flexDirection: 'column', justifyContent: 'space-between', paddingHorizontal: 5, marginTop: 2 }}>
+									<View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+										<MaterialCommunityIcons name="triangle" size={12} style={{ width: 14 }} />
+										<Text style={{ fontSize: 12, opacity: 0.8, marginVertical: 1 }}>16.167 km</Text>
+									</View>
+
+									<View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+										<MaterialCommunityIcons name="timer-outline" size={12} style={{ width: 14 }} />
+										<Text style={{ fontSize: 12, opacity: 0.8, marginVertical: 1 }}>46d 2h</Text>
+									</View>
 								</View>
 							</TouchableOpacity>
 						</View>
@@ -303,6 +315,7 @@ export default function LocatorMapbox({
 	onUserLocationChange,
 }: ComponentProps) {
 	const dispatch = useDispatch();
+	const router = useRouter();
 	const { pinScale, pinTranslate, animate: animatePin } = usePinAnimation();
 
 	// ─── Refs ─────────────────────────────────────────────────────────────────
@@ -451,6 +464,12 @@ export default function LocatorMapbox({
 		cameraRef.current?.setCamera({ zoomLevel: nextZoom, animationDuration });
 		lastCameraRef.current = { ...current, zoom: nextZoom };
 	}, []);
+
+	const handleStats = useCallback(() => {
+		router.push({
+			pathname: "/(modals)/journey-stats",
+		});
+	}, [router]);
 
 	const getSelectionRadius = useCallback(
 		(lat: number, lng: number): number | null => {
@@ -887,6 +906,10 @@ export default function LocatorMapbox({
 									<MaterialCommunityIcons name="crosshairs-gps" size={22} />
 								)}
 							</TouchableOpacity>
+
+							<TouchableOpacity style={styles.zoomButton} onPress={() => handleStats()}>
+								<MaterialCommunityIcons name="information-outline" size={26} />
+							</TouchableOpacity>
 						</View>
 					</View>
 				</View>
@@ -980,8 +1003,7 @@ const styles = StyleSheet.create({
 	hereNowBadge: {
 		backgroundColor: 'white',
 		padding: 3,
-		borderRadius: 30,
-		elevation: 3,
+		borderRadius: 10,
 		alignItems: 'center',
 		justifyContent: 'center',
 		boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.25)',
@@ -1006,10 +1028,10 @@ const styles = StyleSheet.create({
 		borderTopColor: 'white',
 	},
 	changeLocationButton: {
-		backgroundColor: '#fffafa',
-		height: 32,
-		paddingHorizontal: 8,
-		borderRadius: 16,
+		backgroundColor: '#f5f5f5',
+		height: 28,
+		paddingHorizontal: 7,
+		borderRadius: 8,
 		display: 'flex',
 		flexDirection: 'row',
 		alignItems: 'center',
@@ -1018,7 +1040,7 @@ const styles = StyleSheet.create({
 	},
 	lastMarker: {
 		width: 100,
-		height: 90,
+		height: 118,
 		justifyContent: 'flex-end',
 		alignItems: 'center',
 	},

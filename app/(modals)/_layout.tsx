@@ -38,6 +38,20 @@ export default function DialogLayout() {
           },
         }}
       />
+      <Stack.Screen
+        name="journey-stats"
+        options={{
+          title: 'Journey Stats',
+          headerTitleStyle: {
+            fontSize: 20,
+            fontFamily: 'ZalandoSansExpanded_900Black',
+            color: '#1F3D2B',
+          },
+          headerLeft: (props) => {
+            return <HeaderBackButton {...props} />;
+          },
+        }}
+      />
     </Stack>
   );
 }

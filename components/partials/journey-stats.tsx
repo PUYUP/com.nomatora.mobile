@@ -1,73 +1,76 @@
-import { StyleSheet, Text, View } from "react-native";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function JourneyStats() {
+    const data = [
+        { id: '1', title: 'Start', value: '12 Des 2025', icon: 'calendar-today' },
+        { id: '2', title: 'End', value: '12 Des 2025', icon: 'calendar-check' },
+        { id: '3', title: 'Distances', value: '293.4 km', icon: 'map-marker-distance' },
+        { id: '4', title: 'Time', value: '5h 32m', icon: 'clock-outline' },
+        { id: '5', title: 'Expense (452 itm)', value: 'Rp 584.000.353', icon: 'currency-usd' },
+        { id: '6', title: 'Geo Prices', value: '1.252', icon: 'tag-text' },
+        { id: '7', title: 'Photos', value: '464', icon: 'folder-image' },
+        { id: '8', title: 'Video', value: '464', icon: 'video-box' },
+        { id: '9', title: 'Stories', value: '893', icon: 'draw-pen' },
+        { id: '10', title: 'Signals', value: '74', icon: 'antenna' },
+    ];
+
     return (
         <View style={styles.container}>
-            <View style={styles.blockContainer}>
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Distance</Text>
-                    <Text style={styles.blockValue}>12.5 km</Text>
-                </View>
-
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Time</Text>
-                    <Text style={styles.blockValue}>1h 30m</Text>
-                </View>
-
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Expense (Rp)</Text>
-                    <Text style={styles.blockValue}>4.330.000</Text>
-                </View>
-            </View>
-
-            <View style={styles.blockContainer}>
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Stories</Text>
-                    <Text style={styles.blockValue}>42</Text>
-                </View>
-
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Photos</Text>
-                    <Text style={styles.blockValue}>341</Text>
-                </View>
-
-                <View style={styles.block}>
-                    <Text style={styles.blockTitle}>Videos</Text>
-                    <Text style={styles.blockValue}>65</Text>
-                </View>
-            </View>
+            <FlatList
+                data={data}
+                renderItem={({item}) => (
+                    <TouchableOpacity style={styles.fixedWidthItem}>
+                        <View style={styles.blockRow}>
+                            <MaterialCommunityIcons name={item.icon as any} style={styles.icon} color="#1A1A1A" />
+                            <View style={styles.content}>
+                                <Text style={styles.value}>{item.value}</Text>
+                                <Text style={styles.title}>{item.title}</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                )}
+                numColumns={2}
+                columnWrapperStyle={{ 
+                    justifyContent: 'space-between', 
+                    paddingHorizontal: 16,
+                }}
+            />
         </View>
     );
 }
 
 export const styles = StyleSheet.create({
-    container: {
-        
+    container: {},
+    fixedWidthItem: {
+        marginBottom: 16,
+        width: '50%',
+        paddingHorizontal: 8,
     },
-    blockContainer: {
-        flexDirection: 'row',
-        gap: 6,
-        marginBottom: 6,
-    },
-    block: {
+    blockRow: {
         flexDirection: 'column',
-        padding: 5,
-        backgroundColor: 'rgba(255, 255, 255, 0.7)',
-        borderRadius: 8,
-        boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
-        minWidth: 86,
+        gap: 8,
+        padding: 10,
+        paddingVertical: 14,
+        borderRadius: 16,
+        alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 1)',
+        borderColor: '#d3d3d3',
     },
-    blockTitle: {
-        fontSize: 10,
-        color: '#555',
-        textTransform: 'uppercase',
-        marginBottom: 2,
+    title: {
+        fontSize: 13,
+        color: '#666',
+        marginTop: 3,
+        textAlign: 'center',
     },
-    blockValue: {
-        fontSize: 12,
+    value: {
         fontWeight: '700',
-        color: '#000',
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    content: {},
+    icon: {
+        fontSize: 30,
+        color: '#2f4f4f',
     },
 });

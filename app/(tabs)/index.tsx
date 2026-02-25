@@ -13,7 +13,7 @@ import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-it
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 
-export default function HomeScreen() {
+export default function Tracker() {
   const router = useRouter();
   const dispatch = useDispatch();
   const insets = useSafeAreaInsets();

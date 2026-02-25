@@ -1,11 +1,10 @@
-import { JourneyStats } from "@/components/partials/journey-stats";
 import LocatorMapbox from "@/components/partials/locator-mapbox";
 import { SlidePoints } from "@/components/partials/slide-points";
 import { getCurrentLocation } from "@/libs/location";
 import { CoordsData, PlaceData } from "@/models/location";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function Home() {
@@ -113,8 +112,12 @@ export default function Home() {
                     )}
                 </View>
 
-                <View style={[styles.statsContainer, { top: insets.top + 16 }]}>
+                {/* <View style={[styles.statsContainer, { top: insets.top + 16 }]}>
                     <JourneyStats />
+                </View> */}
+
+                <View style={[styles.titleContainer, { top: insets.top + 16 }]}>
+                    <Text style={styles.title}>Nomatora</Text>
                 </View>
 
                 <View style={[styles.slidePointContainer, { bottom: insets.bottom + 90 }]}>
@@ -168,4 +171,22 @@ const styles = StyleSheet.create({
         zIndex: 130,
         width: '70%',
     },
+    titleContainer: {
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        right: 'auto',
+        zIndex: 230,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(255,255,255,0.85)',
+        height: 36,
+        paddingHorizontal: 12,
+        borderRadius: 20,
+        boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.16)',
+    },
+    title: {
+        fontSize: 22,
+        fontFamily: "ZalandoSansExpanded_900Black",
+    }
 });

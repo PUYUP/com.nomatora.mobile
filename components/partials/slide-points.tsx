@@ -83,35 +83,10 @@ const SAMPLES: SlidePointData[] = [
         latitude: -6.183765966320194,
         longitude: 106.7903011284815,
         title: 'Stasiun Palmerah',
-        type: 'station',
+         type: 'story',
         description: 'Stasiun KRL Palmerah',
         placeName: 'Jl. Palmerah Utara',
         arrivedAt: '2026-02-23T11:00:00Z',
-    },
-    {
-        latitude: -6.207360786794562,
-        longitude: 106.71416761925691,
-        title: 'Pantai Indah Kapuk',
-        type: 'beach',
-        placeName: 'PIK, North Jakarta',
-        arrivedAt: '2026-02-23T13:00:00Z',
-    },
-    {
-        latitude: -6.213013701358019,
-        longitude: 106.73431637343074,
-        title: 'Taman Wisata Alam Mangrove',
-        type: 'park',
-        placeName: 'Pantai Indah Kapuk',
-        arrivedAt: '2026-02-23T14:00:00Z',
-    },
-    {
-        latitude: -6.124514553307727,
-        longitude: 106.58507724480036,
-        title: 'Bandara Soekarno-Hatta',
-        type: 'airport',
-        description: 'Bandara Internasional utama',
-        placeName: 'Tangerang, Banten',
-        arrivedAt: '2026-02-23T15:00:00Z',
     },
 ];
 
@@ -148,9 +123,11 @@ const RenderPlaceholder = ({ height }: { height: number }) => {
 
             <View style={[styles.glassCard, { height: height }]}>
                 <Text style={styles.titleWhite}>Wandering...</Text>
-                <TouchableOpacity style={styles.setDestinationButton}>
-                    <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
-                </TouchableOpacity>
+                <View style={{ marginTop: 'auto' }}>
+                    <TouchableOpacity style={styles.setDestinationButton}>
+                        <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
         </View>
     )
@@ -334,7 +311,7 @@ const RenderGeoPriceCard = ({ slidePoint, width, height }: { slidePoint: SlidePo
 
 export function SlidePoints() {
     const [containerWidth, setContainerWidth] = useState(0);
-    const ITEM_WIDTH = containerWidth / 2.15;
+    const ITEM_WIDTH = containerWidth / 2.1;
     const PEEK_RIGHT = ITEM_WIDTH * 0.5;
     const width = ITEM_WIDTH + 34; // for carousel width
     const cardWidth = ITEM_WIDTH - 10;
@@ -352,6 +329,7 @@ export function SlidePoints() {
                     height={cardHeight}
                     maxScrollDistancePerSwipe={width}
                     onSnapToItem={(index) => console.log("current index:", index)}
+                    defaultIndex={data.length - 2}
                     withAnimation={{
                         type: 'spring',
                         config: {
@@ -397,12 +375,14 @@ export function SlidePoints() {
                                     <View style={styles.connectorDestination}>
                                         <DashedLine color="#fff" dashWidth={5} dashHeight={2} gap={4} />
                                     </View>
-
+                                    
                                     <View style={[styles.glassCard, styles.glassCardFixed, { height: cardHeight }]}>
                                         <Text style={styles.titleWhite}>Wandering...</Text>
-                                        <TouchableOpacity style={styles.setDestinationButton}>
-                                            <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
-                                        </TouchableOpacity>
+                                        <View style={{ marginTop: 'auto' }}>
+                                            <TouchableOpacity style={styles.setDestinationButton}>
+                                                <Text style={{ textTransform: 'uppercase', fontSize: 13 }}>Set dest</Text>
+                                            </TouchableOpacity>
+                                        </View>
                                     </View>
                                 </View>
                             );
@@ -582,8 +562,8 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
-        flex: 1,
         width: '100%',
+        height: 32,
         marginTop: 10,
     },
 
