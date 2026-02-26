@@ -11,7 +11,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const haveTrip: boolean = true; // Ganti dengan kondisi sebenarnya untuk menentukan apakah pengguna memiliki trip atau tidak
 
   const tabs = [
-    { name: 'index', label: 'Home', icon: 'home' },
+    { name: 'home', label: 'Home', icon: 'home' },
     { name: 'explore', label: 'Explore', icon: 'globe-model' },
     { name: 'tracker', label: 'Track', icon: 'hiking' },
     { name: 'notification', label: 'Alert', icon: 'bell' },
@@ -39,7 +39,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
         const focused = state.index === index;
         const tint = focused ? '#2f4f4f' : '#708090';
-        const bgColor = focused ? 'rgba(255,255,255,0.9)' : 'rgba(245,245,220,0.85)';
+        const bgColor = focused ? 'rgba(245,245,220,0.85)' : 'rgba(255,255,255,0.9)';
 
         // Sisipkan node kustom SEBELUM tab ke-2 (index 2), atau sesuaikan posisinya
         const customNode = index === 2 ? (
@@ -115,7 +115,7 @@ export default function TabLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
+      <Tabs.Screen name="home" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="tracker" options={{ title: 'Track' }} />
       <Tabs.Screen name="notification" options={{ title: 'Alert' }} />
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   tabItemContainer: {
     backgroundColor: '#f5f5dc',
     paddingVertical: 4,
-    boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
+    // boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.75)',
     width: 46,

@@ -119,7 +119,7 @@ export default function Home() {
 
                 <View style={[styles.titleContainer, { top: insets.top + 16 }]}>
                     <Text style={styles.subtitle} numberOfLines={2}>
-                        Jalan ke Kabupaten Kerinci 
+                        Camping Bersama Menyambut Ramadhan
                     </Text>
                     <TouchableOpacity style={styles.settingsButton}>
                         <MaterialCommunityIcons name="cog" size={20} />
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
         fontFamily: "ZalandoSansExpanded_900Black",
     },
     subtitle: {
-        color: '#333',
+        color: '#111',
         fontSize: 14,
         width: '85%',
     },
