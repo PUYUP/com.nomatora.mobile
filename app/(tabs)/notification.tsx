@@ -10,11 +10,13 @@ import { Link, useRouter } from 'expo-router';
 
 import { expenses as expensesSchema } from "@/database/schema/expense";
 import { expenseItems as expenseItemsSchema } from "@/database/schema/expense-item";
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 
-export default function HomeScreen() {
+export default function Tracker() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
 
   const deleteDBHandler = async () => {
     const db = await getDB();
@@ -31,6 +33,8 @@ export default function HomeScreen() {
   }
   
   return (
+    <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
+      <View style={{ flex: 1, paddingBottom: insets.bottom + 10 }}>
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
       headerImage={
@@ -122,6 +126,8 @@ export default function HomeScreen() {
         </ThemedText>
       </ThemedView>
     </ParallaxScrollView>
+    </View>
+    </SafeAreaView>
   );
 }
 

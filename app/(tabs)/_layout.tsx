@@ -11,7 +11,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const haveTrip: boolean = true; // Ganti dengan kondisi sebenarnya untuk menentukan apakah pengguna memiliki trip atau tidak
 
   const tabs = [
-    { name: 'home', label: 'Home', icon: 'home' },
+    { name: 'index', label: 'Home', icon: 'home' },
     { name: 'explore', label: 'Explore', icon: 'globe-model' },
     { name: 'tracker', label: 'Track', icon: 'hiking' },
     { name: 'notification', label: 'Alert', icon: 'bell' },
@@ -115,7 +115,7 @@ export default function TabLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="home" options={{ title: 'Home' }} />
+      <Tabs.Screen name="index" options={{ title: 'Home' }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
       <Tabs.Screen name="tracker" options={{ title: 'Track' }} />
       <Tabs.Screen name="notification" options={{ title: 'Alert' }} />

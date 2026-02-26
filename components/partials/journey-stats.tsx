@@ -2,19 +2,24 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 export function JourneyStats() {
-    const data = [
-        { id: '6', title: 'Geo Prices', value: '1.252', icon: 'tag-text' },
-        { id: '10', title: 'Signals', value: '74', icon: 'antenna' },
+    const memories = [
         { id: '7', title: 'Photos', value: '464', icon: 'folder-image' },
         { id: '8', title: 'Video', value: '464', icon: 'video-box' },
         { id: '9', title: 'Stories', value: '893', icon: 'draw-pen' },
+        { id: '11', title: 'Check-in', value: '1.254', icon: 'map-marker' },
+    ];
+
+    const contributions = [
+        { id: '6', title: 'Geo Prices', value: '1.252', icon: 'tag-text' },
+        { id: '10', title: 'Signals', value: '74', icon: 'antenna' },
     ];
 
     return (
         <View style={styles.container}>
             <View style={styles.expense}>
-                <Text style={styles.expenseTitle}>Expense for 173 items</Text>
+                <Text style={styles.expenseTitle}>Total Expense</Text>
                 <Text style={styles.expenseValue}>Rp 584.000.353</Text>
+                <Text style={[styles.expenseTitle, { marginTop: 4, fontSize: 14, opacity: 0.7 }]}>173 items</Text>
             </View>
 
             <View style={styles.timeline}>
@@ -42,8 +47,36 @@ export function JourneyStats() {
                 </View>
             </View>
 
+            <View style={{ paddingHorizontal: 24, marginBottom: 8 }}>
+                <Text style={[styles.expenseTitle, styles.sectionTitle]}>Memories</Text>
+            </View>
+
             <FlatList
-                data={data}
+                data={memories}
+                renderItem={({item}) => (
+                    <TouchableOpacity style={styles.fixedWidthItem}>
+                        <View style={styles.blockRow}>
+                            <MaterialCommunityIcons name={item.icon as any} style={styles.icon} color="#1A1A1A" />
+                            <View style={styles.content}>
+                                <Text style={styles.value}>{item.value}</Text>
+                                <Text style={styles.title}>{item.title}</Text>
+                            </View>
+                        </View>
+                    </TouchableOpacity>
+                )}
+                numColumns={2}
+                columnWrapperStyle={{ 
+                    justifyContent: 'space-between', 
+                    paddingHorizontal: 16,
+                }}
+            />
+
+            <View style={{ paddingHorizontal: 24, marginBottom: 8, marginTop: 12 }}>
+                <Text style={[styles.expenseTitle, styles.sectionTitle]}>Contributions</Text>
+            </View>
+
+            <FlatList
+                data={contributions}
                 renderItem={({item}) => (
                     <TouchableOpacity style={styles.fixedWidthItem}>
                         <View style={styles.blockRow}>
@@ -79,8 +112,8 @@ export const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: 16,
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#d3d3d3',
+        borderWidth: 0.5,
+        borderColor: '#e4e4e4',
     },
     title: {
         fontSize: 13,
@@ -88,23 +121,27 @@ export const styles = StyleSheet.create({
         marginTop: 3,
         textAlign: 'center',
     },
+    sectionTitle: {
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontSize: 12,
+    },
     value: {
         fontWeight: '700',
-        fontSize: 16,
+        fontSize: 18,
         textAlign: 'center',
     },
     content: {},
     icon: {
-        fontSize: 30,
-        color: '#2f4f4f',
+        fontSize: 24,
+        opacity: 0.5,
     },
 
     /* expense */
     expense: {
         padding: 16,
-        borderBottomWidth: 1,
-        borderColor: '#d3d3d3',
-        marginBottom: 16,
+        paddingBottom: 26,
+        marginBottom: 26,
         justifyContent: 'center',
         alignItems: 'center',
     },
