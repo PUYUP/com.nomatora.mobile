@@ -12,7 +12,7 @@ import Mapbox, {
 	MarkerView,
 	ShapeSource,
 } from '@rnmapbox/maps';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import type { Feature, GeoJsonProperties, Polygon } from 'geojson';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -55,6 +55,14 @@ type RadiusCircleOptions = {
 	strokeOpacity?: number;
 };
 
+/**
+ * Reason why location is unavailable.
+ * - `'permission_denied'` → user rejected the location permission prompt.
+ * - `'service_disabled'`  → device-level location services are turned off.
+ * - `null`                → location is available (no issue).
+ */
+export type LocationUnavailableReason = 'permission_denied' | 'service_disabled' | null;
+
 type ComponentProps = {
 	requestId: string;
 	purpose?: string;
@@ -72,6 +80,26 @@ type ComponentProps = {
 	radiusCircle?: RadiusCircleOptions | false;
 	onUserLocationChange?: (location: { latitude: number; longitude: number } | null) => void;
 	onLocationEnabled?: (enabled: boolean) => void;
+	/**
+	 * Called whenever the location permission state is determined.
+	 * `true`  → permission granted.
+	 * `false` → permission denied.
+	 * `null`  → not yet determined.
+	 */
+	onLocationPermissionChange?: (granted: boolean | null) => void;
+	/**
+	 * Called whenever the device location service state is determined.
+	 * `true`  → location services are enabled.
+	 * `false` → location services are disabled.
+	 * `null`  → not yet determined.
+	 */
+	onLocationServiceChange?: (enabled: boolean | null) => void;
+	/**
+	 * Aggregated convenience callback — fired whenever either permission or
+	 * service state changes.  Receives `null` when location is fully available,
+	 * or a specific reason string when it is not.
+	 */
+	onLocationUnavailable?: (reason: LocationUnavailableReason) => void;
 };
 
 type PlaceCoord = { latitude: number; longitude: number; title: string };
@@ -192,7 +220,6 @@ function usePinAnimation() {
 	const pinScale = useRef(new Animated.Value(1)).current;
 	const pinTranslate = useRef(new Animated.Value(0)).current;
 
-	// Animated.Value refs are stable for the component lifetime — no deps needed.
 	const animate = useCallback((dragging: boolean) => {
 		const config = { useNativeDriver: true, speed: 20, bounciness: 6 };
 		Animated.spring(pinScale, { toValue: dragging ? 1.1 : 1, ...config }).start();
@@ -217,7 +244,6 @@ export const CustomMarker = ({
 	total: number;
 	onChangeLocation: (coord: PlaceCoord) => void;
 	isDragMarkerVisible: boolean;
-	/** Ref so we can gate the press without needing a re-render cycle. */
 	isDraggingRef: React.MutableRefObject<boolean>;
 }) => {
 	if (!coord) return null;
@@ -272,7 +298,7 @@ export const CustomMarker = ({
 									<Text style={{ fontSize: 12, textAlign: 'center', textTransform: 'uppercase' }}>
 										Change
 									</Text>
-								</View>		
+								</View>
 
 								<View style={{ flexDirection: 'column', justifyContent: 'space-between', paddingHorizontal: 5, marginTop: 2 }}>
 									<View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -297,29 +323,36 @@ export const CustomMarker = ({
 	);
 };
 
-const RenderLocationDisabled = () => (
-    <View style={styles.locationDisabledContainer}>
-        <View style={styles.locationDisabledContent}>
-            <Text style={{ color: 'red', fontSize: 15, textAlign: 'center' }}>
-                Location services are disabled. Enable location to use this feature.
-            </Text>
+const RenderLocationDisabled = ({ enabled, permissionGranted }: { enabled: boolean | null; permissionGranted: boolean | null }) => {
+	console.log('Rendering location disabled message:', { enabled, permissionGranted });
+	return (
+		<View style={styles.locationDisabledContainer}>
+			<View style={styles.locationDisabledContent}>
+				<Text style={{ color: 'red', fontSize: 15, textAlign: 'center' }}>
+					{enabled === false && 'Location services are disabled. Enable location to use this feature.'}
+					{permissionGranted === false && 'Location permission denied. Grant permission to use this feature.'}
+				</Text>
 
-            <TouchableOpacity style={styles.openSettingsButton} onPress={() => {
-                // Open system settings to enable location
-                if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                } else {
-                    Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
-                }
-            }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <MaterialCommunityIcons name="cog" size={16} color="#fff" />
-                    <Text style={styles.openSettingsButtonText}>Open Settings</Text>
-                </View>
-            </TouchableOpacity>
-        </View>
-    </View>
-);
+				<TouchableOpacity style={styles.openSettingsButton} onPress={() => {
+					if (Platform.OS === 'ios') {
+						Linking.openURL('app-settings:');
+					} else {
+						if (enabled === false) {
+							Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+						} else if (permissionGranted === false) {
+							Linking.openSettings();
+						}
+					}
+				}}>
+					<View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+						<MaterialCommunityIcons name="cog" size={16} color="#fff" />
+						<Text style={styles.openSettingsButtonText}>Open Settings</Text>
+					</View>
+				</TouchableOpacity>
+			</View>
+		</View>
+	)
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -340,6 +373,9 @@ export default function LocatorMapbox({
 	radiusCircle,
 	onUserLocationChange,
 	onLocationEnabled,
+	onLocationPermissionChange,
+	onLocationServiceChange,
+	onLocationUnavailable,
 }: ComponentProps) {
 	const dispatch = useDispatch();
 	const router = useRouter();
@@ -353,28 +389,12 @@ export default function LocatorMapbox({
 	const lastCameraRef = useRef<{ center: LatLng; zoom: number } | null>(null);
 	const isDraggingRef = useRef(false);
 	const hasInitialized = useRef(false);
-	/**
-	 * Tracks in-flight geocode calls so a stale response from a previous idle
-	 * event cannot overwrite a newer one. Incremented each time handleMapIdle
-	 * kicks off a geocode; the callback checks its captured value still matches.
-	 */
 	const geocodeGenerationRef = useRef(0);
-	/**
-	 * Tracks in-flight initializeLocationFlow calls so that a backgrounded app
-	 * returning to foreground cancels any previous in-flight async chain.
-	 */
 	const initGenerationRef = useRef(0);
-	/**
-	 * Ref mirror of isRecentering so async callbacks always read the current
-	 * value without needing isRecentering in their dependency arrays (which
-	 * would cause stale-closure issues or unnecessary re-creation).
-	 */
 	const isRecenteringRef = useRef(false);
 
 	// ─── State ────────────────────────────────────────────────────────────────
 	const [isFitBounds, setIsFitBounds] = useState<boolean>(fitBounds);
-	// Ref mirror so handleCameraChanged can read the current value without
-	// being in its dep array (which would cause it to be recreated on every toggle).
 	const isFitBoundsRef = useRef(fitBounds);
 	const setIsFitBoundsSynced = useCallback((value: boolean) => {
 		isFitBoundsRef.current = value;
@@ -388,7 +408,6 @@ export default function LocatorMapbox({
 	const [localPlaces, setLocalPlaces] = useState<PlaceData[]>(places ?? []);
 	const [hasUserRecentered, setHasUserRecentered] = useState(false);
 	const [isRecentering, setIsRecentering] = useState(false);
-	// Keep ref mirror in sync — updated synchronously before any re-render.
 	const setIsRecenteringSynced = useCallback((value: boolean) => {
 		isRecenteringRef.current = value;
 		setIsRecentering(value);
@@ -397,7 +416,72 @@ export default function LocatorMapbox({
 	const [userLocation, setUserLocation] = useState<LatLng | null>(
 		() => parseLatLng(initialLat, initialLng),
 	);
+
+	// ─── Location availability state ──────────────────────────────────────────
+	/**
+	 * `true`  → services are on
+	 * `false` → services are off (SERVICES_DISABLED error)
+	 * `null`  → not yet determined
+	 */
 	const [locationEnabled, setLocationEnabled] = useState<boolean | null>(null);
+
+	/**
+	 * `true`  → permission granted
+	 * `false` → permission denied (PERMISSION_DENIED error)
+	 * `null`  → not yet determined
+	 */
+	const [locationPermissionGranted, setLocationPermissionGranted] = useState<boolean | null>(null);
+
+	/**
+	 * Aggregated reason derived from the two states above.
+	 * Kept in sync via a dedicated effect so every consumer always sees the
+	 * latest value without duplicating derivation logic.
+	 *
+	 * `null`                → no issue, location is fully available
+	 * `'service_disabled'`  → device-level location services are off
+	 * `'permission_denied'` → user refused the permission prompt
+	 */
+	const [locationUnavailableReason, setLocationUnavailableReason] =
+		useState<LocationUnavailableReason>(null);
+
+	// ─── Synced location state setters ───────────────────────────────────────
+	/**
+	 * Sets `locationEnabled` AND immediately fires the `onLocationServiceChange`
+	 * callback so the parent always receives updates in the same tick.
+	 */
+	const setLocationEnabledSynced = useCallback(
+		(value: boolean | null) => {
+			setLocationEnabled(value);
+			onLocationServiceChange?.(value);
+		},
+		[onLocationServiceChange],
+	);
+
+	/**
+	 * Sets `locationPermissionGranted` AND immediately fires the
+	 * `onLocationPermissionChange` callback.
+	 */
+	const setLocationPermissionGrantedSynced = useCallback(
+		(value: boolean | null) => {
+			setLocationPermissionGranted(value);
+			onLocationPermissionChange?.(value);
+		},
+		[onLocationPermissionChange],
+	);
+
+	// ─── Derive & broadcast locationUnavailableReason ────────────────────────
+	useEffect(() => {
+		let reason: LocationUnavailableReason = null;
+
+		if (locationEnabled === false) {
+			reason = 'service_disabled';
+		} else if (locationPermissionGranted === false) {
+			reason = 'permission_denied';
+		}
+
+		setLocationUnavailableReason(reason);
+		onLocationUnavailable?.(reason);
+	}, [locationEnabled, locationPermissionGranted, onLocationUnavailable]);
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────
 	useEffect(() => {
@@ -412,17 +496,13 @@ export default function LocatorMapbox({
 	}, []);
 
 	useEffect(() => {
-		// Add the event listener to track changes
 		const subscription = AppState.addEventListener("change", async (nextAppState) => {
-			// Logic for foreground vs background
 			if (appState.current.match(/inactive|background/) && nextAppState === "active") {
-				// refresh location when the app comes back to foreground
 				initializeLocationFlow();
 			}
 			appState.current = nextAppState;
 		});
 
-		// Clean up the listener when the component unmounts
 		return () => {
 			subscription.remove();
 		};
@@ -540,15 +620,15 @@ export default function LocatorMapbox({
 	// ─── Location flow ────────────────────────────────────────────────────────
 
 	const initializeLocationFlow = useCallback(async () => {
-		// Invalidate any previous in-flight init. Each call captures its own
-		// generation; if a newer call starts before this one finishes, the
-		// isMounted checks below will still pass (component is mounted) but
-		// we'd overwrite fresh state with stale data. The generation counter
-		// prevents that.
 		const generation = ++initGenerationRef.current;
 		const isCurrent = () => isMounted.current && initGenerationRef.current === generation;
 
 		setIsLoading(true);
+
+		// Reset location availability state at the start of every flow so that
+		// returning from Settings (foreground transition) always re-evaluates.
+		setLocationEnabledSynced(null);
+		setLocationPermissionGrantedSynced(null);
 
 		const initial = parseLatLng(initialLat, initialLng);
 		if (initial) {
@@ -569,18 +649,35 @@ export default function LocatorMapbox({
 			if (!isCurrent()) return;
 			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
 			setUserLocation({ latitude, longitude });
-			setLocationEnabled(true);
+			setLocationEnabledSynced(true);
+			setLocationPermissionGrantedSynced(true);
 
 			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', { latitude, longitude })));
 		} else {
 			applyCamera({ latitude: 0, longitude: 0 }, 0);
-			const enabled = location.error?.code !== 'SERVICES_DISABLED';
-			onLocationEnabled?.(enabled);
-			setLocationEnabled(enabled);
+			const errorCode = location.error?.code;
+
+			if (errorCode === 'SERVICES_DISABLED') {
+				onLocationEnabled?.(false);
+				setLocationEnabledSynced(false);
+				setLocationPermissionGrantedSynced(false);
+			} else if (errorCode === 'PERMISSION_DENIED') {
+				setLocationEnabledSynced(true);
+				setLocationPermissionGrantedSynced(false);
+			}
 		}
 
 		if (isCurrent()) setIsLoading(false);
-	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName, onLocationEnabled, setLocationEnabled]);
+	}, [
+		applyCamera,
+		broadcastLocation,
+		initialLat,
+		initialLng,
+		initialPlaceName,
+		onLocationEnabled,
+		setLocationEnabledSynced,
+		setLocationPermissionGrantedSynced,
+	]);
 
 	// ─── Effects ──────────────────────────────────────────────────────────────
 
@@ -611,17 +708,14 @@ export default function LocatorMapbox({
 	useEffect(() => {
 		const subscription = AppState.addEventListener('change', (nextAppState) => {
 			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-				initializeLocationFlowRef.current(); // always calls latest
+				initializeLocationFlowRef.current();
 			}
 			appState.current = nextAppState;
 		});
 		return () => subscription.remove();
-	}, []); // ← empty deps, use the ref inside to call latest version
+	}, []);
 
 	useEffect(() => {
-		// Only re-fit when fit-bounds mode is explicitly ON and we have enough
-		// info. The isFitBounds check is the primary guard — when OFF, the
-		// placeCoords / mapLayout changes must not silently move the camera.
 		if (!isFitBounds || !cameraRef.current || !placeCoords.length || !mapLayout.width || !mapLayout.height) return;
 		const lats = placeCoords.map((p) => p.latitude);
 		const lngs = placeCoords.map((p) => p.longitude);
@@ -631,16 +725,19 @@ export default function LocatorMapbox({
 			40,
 			400,
 		);
-		// Sync the ref in case the effect ran before setIsFitBoundsSynced could.
 		isFitBoundsRef.current = isFitBounds;
 	}, [isFitBounds, placeCoords, mapLayout.width, mapLayout.height]);
+
+	useFocusEffect(
+		useCallback(() => {
+			initializeLocationFlowRef.current();
+		}, [])
+	);
 
 	// ─── Map event handlers ───────────────────────────────────────────────────
 
 	const handleCameraChanged = useCallback(
 		(state: MapState) => {
-			// Always keep lastCameraRef in sync with the real camera position so
-			// that zoomBy() reads a fresh zoom level regardless of how the camera moved.
 			const [longitude, latitude] = state.properties.center;
 			lastCameraRef.current = {
 				center: { latitude, longitude },
@@ -662,10 +759,6 @@ export default function LocatorMapbox({
 				animatePin(true);
 			}
 
-			// Only disable fit-bounds when the user is actively gesturing.
-			// Programmatic moves (fitBounds animation, applyCamera, zoom buttons)
-			// also fire onCameraChanged — we must NOT clear the flag for those,
-			// or toggling fit-bounds ON would immediately turn itself back OFF.
 			if (isFitBoundsRef.current && state.gestures?.isGestureActive) {
 				setIsFitBoundsSynced(false);
 			}
@@ -687,23 +780,16 @@ export default function LocatorMapbox({
 			}
 
 			const isUserInteraction = state.gestures?.isGestureActive || false;
-			// Use ref for isRecentering — reading state here would capture a stale
-			// closure value from when the callback was last created.
 			if (!(wasUserDrag || isUserInteraction) || !onSelecting || isRecenteringRef.current) return;
 
 			const [longitude, latitude] = state.properties.center;
 			const radius = getSelectionRadius(latitude, longitude);
 
-			// Stamp this geocode call so a stale response from a previous idle
-			// event cannot overwrite the result of a newer one.
 			const generation = ++geocodeGenerationRef.current;
 			const isCurrent = () => isMounted.current && geocodeGenerationRef.current === generation;
 
 			if (resolvedRadiusCircle && radius != null && userLocation) {
 				if (radius > resolvedRadiusCircle.radiusMeters) {
-					// Out of bounds — snap camera back to user location.
-					// Do this synchronously before the alert so the map moves
-					// immediately rather than after the user dismisses the dialog.
 					updateSelectionPlace(latitude, longitude, radius, userLocation);
 					cameraRef.current?.setCamera({
 						centerCoordinate: [userLocation.longitude, userLocation.latitude],
@@ -721,7 +807,6 @@ export default function LocatorMapbox({
 					}
 				}
 			} else if (!resolvedRadiusCircle && onSelecting) {
-				// No radius constraint — still geocode and broadcast the new location.
 				const geocoded = await reverseGeocodeLocation(latitude, longitude);
 				if (isCurrent() && geocoded.ok) {
 					broadcastLocation(latitude, longitude, geocoded.data.name);
@@ -753,7 +838,6 @@ export default function LocatorMapbox({
 		setIsRecenteringSynced(true);
 		const location = await getCurrentLocation();
 		if (!isMounted.current) {
-			// Component unmounted mid-flight — clean up ref so future mounts start fresh.
 			isRecenteringRef.current = false;
 			return;
 		}
@@ -782,12 +866,6 @@ export default function LocatorMapbox({
 		setIsRecenteringSynced(false);
 	}, [applyCamera, broadcastLocation, setIsRecenteringSynced, setIsFitBoundsSynced]);
 
-	/**
-	 * Toggles fit-bounds mode.
-	 * - Turning ON  → immediately fires fitBounds on the camera so all markers
-	 *   are framed without waiting for the next placeCoords change.
-	 * - Turning OFF → leaves the camera where it is; the user can pan freely.
-	 */
 	const fitToBoundsHandler = useCallback(() => {
 		const next = !isFitBoundsRef.current;
 		setIsFitBoundsSynced(next);
@@ -810,8 +888,10 @@ export default function LocatorMapbox({
 
 	return (
 		<View style={[styles.container, containerStyle]}>
-			{locationEnabled === false && !isLoading && <RenderLocationDisabled />}
-			
+			{(locationEnabled === false || locationPermissionGranted === false) && !isLoading && (
+				<RenderLocationDisabled enabled={locationEnabled} permissionGranted={locationPermissionGranted} />
+			)}
+
 			<View style={styles.page}>
 				<View style={styles.mapCard}>
 					<View style={styles.mapWrapper}>
@@ -941,7 +1021,6 @@ export default function LocatorMapbox({
 
 							{userLocation && (
 								<React.Fragment>
-									{/* ── Fit-bounds toggle ── */}
 									<TouchableOpacity
 										style={[
 											styles.zoomButton,
@@ -1043,13 +1122,11 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.16)',
 	},
-	/** Active state: filled blue background to show fit-bounds is ON. */
 	zoomButtonActive: {
 		backgroundColor: '#1382fe',
 		borderColor: '#1382fe',
 		boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.16)',
 	},
-	/** Disabled state: muted appearance when there are no markers to fit. */
 	zoomButtonDisabled: {
 		opacity: 0.4,
 	},
@@ -1140,32 +1217,32 @@ const styles = StyleSheet.create({
 	},
 
 	/* Location Disabled Styles */
-    locationDisabledContainer: {
-        position: 'absolute',
-        top: '40%',
-        left: 0,
-        right: 0,
-        zIndex: 200,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    locationDisabledContent: {
-        backgroundColor: 'rgba(255,255,255,0.75)',
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: 12,
-        alignItems: 'center',
-        width: 260,
-    },
-    openSettingsButton: {
-        marginTop: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        backgroundColor: '#1A1A1A',
-        borderRadius: 16,
-    },
-    openSettingsButtonText: {
-        color: '#fff',
-        fontSize: 14,
-    }
+	locationDisabledContainer: {
+		position: 'absolute',
+		top: '40%',
+		left: 0,
+		right: 0,
+		zIndex: 200,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	locationDisabledContent: {
+		backgroundColor: 'rgba(255,255,255,0.75)',
+		paddingHorizontal: 24,
+		paddingVertical: 12,
+		borderRadius: 12,
+		alignItems: 'center',
+		width: 260,
+	},
+	openSettingsButton: {
+		marginTop: 12,
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		backgroundColor: '#1A1A1A',
+		borderRadius: 16,
+	},
+	openSettingsButtonText: {
+		color: '#fff',
+		fontSize: 14,
+	}
 });
