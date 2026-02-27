@@ -21,6 +21,7 @@ import {
 	Animated,
 	AppState,
 	Image,
+	Linking,
 	Platform,
 	StyleProp,
 	StyleSheet,
@@ -57,8 +58,8 @@ type RadiusCircleOptions = {
 type ComponentProps = {
 	requestId: string;
 	purpose?: string;
-	initialLat?: string | number;
-	initialLng?: string | number;
+	initialLat?: undefined | number;
+	initialLng?: undefined | number;
 	initialPlaceName?: string;
 	mapType?: 'standard' | 'satellite' | 'hybrid' | 'terrain' | 'none';
 	containerStyle?: StyleProp<ViewStyle>;
@@ -70,6 +71,7 @@ type ComponentProps = {
 	isSelecting?: boolean;
 	radiusCircle?: RadiusCircleOptions | false;
 	onUserLocationChange?: (location: { latitude: number; longitude: number } | null) => void;
+	onLocationEnabled?: (enabled: boolean) => void;
 };
 
 type PlaceCoord = { latitude: number; longitude: number; title: string };
@@ -295,6 +297,30 @@ export const CustomMarker = ({
 	);
 };
 
+const RenderLocationDisabled = () => (
+    <View style={styles.locationDisabledContainer}>
+        <View style={styles.locationDisabledContent}>
+            <Text style={{ color: 'red', fontSize: 15, textAlign: 'center' }}>
+                Location services are disabled. Enable location to use this feature.
+            </Text>
+
+            <TouchableOpacity style={styles.openSettingsButton} onPress={() => {
+                // Open system settings to enable location
+                if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                } else {
+                    Linking.sendIntent('android.settings.LOCATION_SOURCE_SETTINGS');
+                }
+            }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MaterialCommunityIcons name="cog" size={16} color="#fff" />
+                    <Text style={styles.openSettingsButtonText}>Open Settings</Text>
+                </View>
+            </TouchableOpacity>
+        </View>
+    </View>
+);
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function LocatorMapbox({
@@ -313,6 +339,7 @@ export default function LocatorMapbox({
 	isSelecting = false,
 	radiusCircle,
 	onUserLocationChange,
+	onLocationEnabled,
 }: ComponentProps) {
 	const dispatch = useDispatch();
 	const router = useRouter();
@@ -325,6 +352,7 @@ export default function LocatorMapbox({
 	const cameraRef = useRef<Mapbox.Camera | null>(null);
 	const lastCameraRef = useRef<{ center: LatLng; zoom: number } | null>(null);
 	const isDraggingRef = useRef(false);
+	const hasInitialized = useRef(false);
 	/**
 	 * Tracks in-flight geocode calls so a stale response from a previous idle
 	 * event cannot overwrite a newer one. Incremented each time handleMapIdle
@@ -369,6 +397,7 @@ export default function LocatorMapbox({
 	const [userLocation, setUserLocation] = useState<LatLng | null>(
 		() => parseLatLng(initialLat, initialLng),
 	);
+	const [locationEnabled, setLocationEnabled] = useState<boolean | null>(null);
 
 	// ─── Lifecycle ────────────────────────────────────────────────────────────
 	useEffect(() => {
@@ -379,6 +408,23 @@ export default function LocatorMapbox({
 				clearTimeout(revealPinTimerRef.current);
 				revealPinTimerRef.current = null;
 			}
+		};
+	}, []);
+
+	useEffect(() => {
+		// Add the event listener to track changes
+		const subscription = AppState.addEventListener("change", async (nextAppState) => {
+			// Logic for foreground vs background
+			if (appState.current.match(/inactive|background/) && nextAppState === "active") {
+				// refresh location when the app comes back to foreground
+				initializeLocationFlow();
+			}
+			appState.current = nextAppState;
+		});
+
+		// Clean up the listener when the component unmounts
+		return () => {
+			subscription.remove();
 		};
 	}, []);
 
@@ -516,23 +562,33 @@ export default function LocatorMapbox({
 		if (!isCurrent()) return;
 
 		if (location.ok) {
+			onLocationEnabled?.(true);
 			const { latitude, longitude } = location.data;
 			applyCamera({ latitude, longitude });
 			const geocoded = await reverseGeocodeLocation(latitude, longitude);
 			if (!isCurrent()) return;
 			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
+			setUserLocation({ latitude, longitude });
+			setLocationEnabled(true);
+
+			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', { latitude, longitude })));
 		} else {
-			applyCamera({ latitude: 0, longitude: 0 });
+			applyCamera({ latitude: 0, longitude: 0 }, 0);
+			const enabled = location.error?.code !== 'SERVICES_DISABLED';
+			onLocationEnabled?.(enabled);
+			setLocationEnabled(enabled);
 		}
 
 		if (isCurrent()) setIsLoading(false);
-	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName]);
+	}, [applyCamera, broadcastLocation, initialLat, initialLng, initialPlaceName, onLocationEnabled, setLocationEnabled]);
 
 	// ─── Effects ──────────────────────────────────────────────────────────────
 
 	useEffect(() => {
+		if (hasInitialized.current) return;
+		hasInitialized.current = true;
 		initializeLocationFlow();
-	}, [initializeLocationFlow]);
+	}, []); // empty deps — run once
 
 	useEffect(() => {
 		if (!onSelecting || !userLocation) return;
@@ -547,15 +603,20 @@ export default function LocatorMapbox({
 		setHasUserRecentered(false);
 	}, [places]);
 
+	const initializeLocationFlowRef = useRef(initializeLocationFlow);
+	useEffect(() => {
+		initializeLocationFlowRef.current = initializeLocationFlow;
+	});
+
 	useEffect(() => {
 		const subscription = AppState.addEventListener('change', (nextAppState) => {
 			if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-				initializeLocationFlow();
+				initializeLocationFlowRef.current(); // always calls latest
 			}
 			appState.current = nextAppState;
 		});
 		return () => subscription.remove();
-	}, [initializeLocationFlow]);
+	}, []); // ← empty deps, use the ref inside to call latest version
 
 	useEffect(() => {
 		// Only re-fit when fit-bounds mode is explicitly ON and we have enough
@@ -749,6 +810,8 @@ export default function LocatorMapbox({
 
 	return (
 		<View style={[styles.container, containerStyle]}>
+			{locationEnabled === false && !isLoading && <RenderLocationDisabled />}
+			
 			<View style={styles.page}>
 				<View style={styles.mapCard}>
 					<View style={styles.mapWrapper}>
@@ -842,7 +905,7 @@ export default function LocatorMapbox({
 							</View>
 						)}
 
-						{onSelecting && isDragMarkerVisible && (
+						{onSelecting && isDragMarkerVisible && userLocation && (
 							<>
 								<View style={styles.centerMarker} pointerEvents="none">
 									<Animated.View
@@ -876,40 +939,44 @@ export default function LocatorMapbox({
 								<MaterialCommunityIcons name="minus" size={26} />
 							</TouchableOpacity>
 
-							{/* ── Fit-bounds toggle ── */}
-							<TouchableOpacity
-								style={[
-									styles.zoomButton,
-									isFitBounds && styles.zoomButtonActive,
-									!placeCoords.length && styles.zoomButtonDisabled,
-								]}
-								onPress={fitToBoundsHandler}
-								disabled={!placeCoords.length}
-								activeOpacity={0.7}
-							>
-								<MaterialCommunityIcons
-									name="map-marker-path"
-									size={26}
-									color={isFitBounds ? '#fff' : '#333'}
-								/>
-							</TouchableOpacity>
+							{userLocation && (
+								<React.Fragment>
+									{/* ── Fit-bounds toggle ── */}
+									<TouchableOpacity
+										style={[
+											styles.zoomButton,
+											isFitBounds && styles.zoomButtonActive,
+											!placeCoords.length && styles.zoomButtonDisabled,
+										]}
+										onPress={fitToBoundsHandler}
+										disabled={!placeCoords.length}
+										activeOpacity={0.7}
+									>
+										<MaterialCommunityIcons
+											name="map-marker-path"
+											size={26}
+											color={isFitBounds ? '#fff' : '#333'}
+										/>
+									</TouchableOpacity>
 
-							<TouchableOpacity
-								style={[styles.zoomButton, { opacity: isRecentering || onSelecting ? 0.5 : 1 }]}
-								onPress={recenterToUserLocation}
-								disabled={isRecentering || onSelecting}
-								activeOpacity={0.6}
-							>
-								{isRecentering ? (
-									<ActivityIndicator size="small" />
-								) : (
-									<MaterialCommunityIcons name="crosshairs-gps" size={22} />
-								)}
-							</TouchableOpacity>
+									<TouchableOpacity
+										style={[styles.zoomButton, { opacity: isRecentering || onSelecting ? 0.5 : 1 }]}
+										onPress={recenterToUserLocation}
+										disabled={isRecentering || onSelecting}
+										activeOpacity={0.6}
+									>
+										{isRecentering ? (
+											<ActivityIndicator size="small" />
+										) : (
+											<MaterialCommunityIcons name="crosshairs-gps" size={22} />
+										)}
+									</TouchableOpacity>
 
-							<TouchableOpacity style={styles.zoomButton} onPress={() => handleStats()}>
-								<MaterialCommunityIcons name="information-outline" size={26} />
-							</TouchableOpacity>
+									<TouchableOpacity style={styles.zoomButton} onPress={() => handleStats()}>
+										<MaterialCommunityIcons name="information-outline" size={26} />
+									</TouchableOpacity>
+								</React.Fragment>
+							)}
 						</View>
 					</View>
 				</View>
@@ -963,23 +1030,24 @@ const styles = StyleSheet.create({
 		position: 'absolute',
 		right: 16,
 		top: 10,
-		gap: 6,
+		gap: 8,
 	},
 	zoomButton: {
 		backgroundColor: '#fff',
 		borderWidth: 1,
 		borderColor: '#e5e7eb',
-		width: 36,
-		height: 36,
-		borderRadius: 18,
+		width: 40,
+		height: 40,
+		borderRadius: 20,
 		alignItems: 'center',
 		justifyContent: 'center',
-		boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.16)',
+		boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.16)',
 	},
 	/** Active state: filled blue background to show fit-bounds is ON. */
 	zoomButtonActive: {
 		backgroundColor: '#1382fe',
 		borderColor: '#1382fe',
+		boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.16)',
 	},
 	/** Disabled state: muted appearance when there are no markers to fit. */
 	zoomButtonDisabled: {
@@ -1006,7 +1074,7 @@ const styles = StyleSheet.create({
 		borderRadius: 10,
 		alignItems: 'center',
 		justifyContent: 'center',
-		boxShadow: '0px 2px 8px 0px rgba(0, 0, 0, 0.25)',
+		boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
 	},
 	hereNowArrowWrapper: {
 		marginTop: -2,
@@ -1070,4 +1138,34 @@ const styles = StyleSheet.create({
 		borderWidth: 3,
 		borderColor: '#fff',
 	},
+
+	/* Location Disabled Styles */
+    locationDisabledContainer: {
+        position: 'absolute',
+        top: '40%',
+        left: 0,
+        right: 0,
+        zIndex: 200,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    locationDisabledContent: {
+        backgroundColor: 'rgba(255,255,255,0.75)',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 12,
+        alignItems: 'center',
+        width: 260,
+    },
+    openSettingsButton: {
+        marginTop: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        backgroundColor: '#1A1A1A',
+        borderRadius: 16,
+    },
+    openSettingsButtonText: {
+        color: '#fff',
+        fontSize: 14,
+    }
 });

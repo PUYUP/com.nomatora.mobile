@@ -71,9 +71,9 @@ export const styles = StyleSheet.create({
         marginBottom: 20,
     },
     avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: '#2f4f4f',
         justifyContent: 'center',
         alignItems: 'center',
@@ -87,6 +87,5 @@ export const styles = StyleSheet.create({
         fontSize: 12,
         color: '#666',
         fontFamily: 'Inter_400Regular',
-        marginTop: 2,
     },
 });

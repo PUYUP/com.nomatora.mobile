@@ -44,7 +44,10 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         // Sisipkan node kustom SEBELUM tab ke-2 (index 2), atau sesuaikan posisinya
         const customNode = index === 2 ? (
           <View key="checkin-node" style={{ flex: 1, position: 'relative', zIndex: 17 }}>
-            <TouchableOpacity style={[styles.checkInButton, !haveTrip && { backgroundColor: '#4169e1' }]}>
+            <TouchableOpacity style={[
+              styles.checkInButton, !haveTrip && { backgroundColor: '#4169e1' },
+              state.routes[state.index]?.name === 'tracker' && { boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)' }
+            ]}>
               {haveTrip ? (
                 <>
                   <MaterialCommunityIcons name="map-plus" size={20} />
@@ -79,6 +82,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               <View style={[
                 styles.tabItemContainer,
                 { backgroundColor: bgColor },
+                state.routes[state.index]?.name === 'tracker' && { boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)' }
               ]}>
                 <MaterialCommunityIcons
                   size={24}
@@ -132,7 +136,6 @@ const styles = StyleSheet.create({
   tabItemContainer: {
     backgroundColor: '#f5f5dc',
     paddingVertical: 4,
-    // boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.75)',
     width: 46,
@@ -167,6 +170,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
-    boxShadow: '0px 2px 4px 0px rgba(0, 0, 0, 0.25)',
   },
 });

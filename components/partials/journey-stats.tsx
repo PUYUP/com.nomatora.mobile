@@ -140,8 +140,7 @@ export const styles = StyleSheet.create({
     /* expense */
     expense: {
         padding: 16,
-        paddingBottom: 26,
-        marginBottom: 26,
+        paddingBottom: 40,
         justifyContent: 'center',
         alignItems: 'center',
     },

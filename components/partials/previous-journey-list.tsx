@@ -70,7 +70,7 @@ export const styles = StyleSheet.create({
         alignItems: 'center',
     },
     headerText: {
-        fontSize: 18,
+        fontSize: 15,
         fontFamily: 'Inter_600SemiBold',
         color: '#333',
         paddingLeft: 2,
@@ -87,12 +87,12 @@ export const styles = StyleSheet.create({
         boxShadow: '0px 1px 4px 0px rgba(0, 0, 0, 0.1)',
     },
     itemTitle: {
-        fontSize: 16,
+        fontSize: 14,
         color: '#333',
         marginBottom: 4,
     },
     itemMeta: {
-        fontSize: 14,
+        fontSize: 12,
         color: '#666',
         marginTop: 4,
     },
@@ -105,7 +105,7 @@ export const styles = StyleSheet.create({
         alignItems: 'flex-end',
     },
     itemDate: {
-        fontSize: 16,
+        fontSize: 14,
         marginBottom: 2,
     },
     itemSubDate: {
