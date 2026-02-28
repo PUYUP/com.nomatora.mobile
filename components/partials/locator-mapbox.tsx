@@ -655,7 +655,7 @@ export default function LocatorMapbox({
 			setUserLocation(coords);
 			setLocationEnabledSynced(true);
 			setLocationPermissionGrantedSynced(true);
-			applyCamera(coords, DEFAULT_ZOOM, 250);
+			applyCamera(coords, DEFAULT_ZOOM, 10);
 		} else {
 			applyCamera({ latitude: 0, longitude: 0 }, 0);
 			const errorCode = location.error?.code;
