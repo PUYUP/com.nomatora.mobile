@@ -9,54 +9,54 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const BASE_PLACES: PlaceData[] = [
-    {
-        properties: { name: 'Dummy 1' },
-        geometry: {
-            coordinate: { latitude: -6.1993066979615294, longitude: 106.80059008229979 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 2' },
-        geometry: {
-            coordinate: { latitude: -6.197749445570561, longitude: 106.79634146318625 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 3' },
-        geometry: {
-            coordinate: { latitude: -6.193994955085802, longitude: 106.7940562211111 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 4' },
-        geometry: {
-            coordinate: { latitude: -6.183765966320194, longitude: 106.7903011284815 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 5' },
-        geometry: {
-            coordinate: { latitude: -6.165428708566159, longitude: 106.78182152873754 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 6' },
-        geometry: {
-            coordinate: { latitude: -6.207360786794562, longitude: 106.71416761925691 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 7' },
-        geometry: {
-            coordinate: { latitude: -6.213013701358019, longitude: 106.73431637343074 }, // [lat, lng]
-        },
-    },
-    {
-        properties: { name: 'Dummy 8' },
-        geometry: {
-            coordinate: { latitude: -6.124514553307727, longitude: 106.58507724480036 }, // [lat, lng]
-        },
-    }, 
+    // {
+    //     properties: { name: 'Dummy 1' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.1993066979615294, longitude: 106.80059008229979 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 2' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.197749445570561, longitude: 106.79634146318625 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 3' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.193994955085802, longitude: 106.7940562211111 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 4' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.183765966320194, longitude: 106.7903011284815 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 5' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.165428708566159, longitude: 106.78182152873754 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 6' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.207360786794562, longitude: 106.71416761925691 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 7' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.213013701358019, longitude: 106.73431637343074 }, // [lat, lng]
+    //     },
+    // },
+    // {
+    //     properties: { name: 'Dummy 8' },
+    //     geometry: {
+    //         coordinate: { latitude: -6.124514553307727, longitude: 106.58507724480036 }, // [lat, lng]
+    //     },
+    // }, 
 ];
 
 export default function Home() {

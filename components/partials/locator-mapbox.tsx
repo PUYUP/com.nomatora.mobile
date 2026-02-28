@@ -249,7 +249,7 @@ export const CustomMarker = ({
 	if (!coord) return null;
 
 	const isFirst = index === 0;
-	const isLast = total > 1 && index === total - 1;
+	const isLast = total === 1 ? true : (total > 1 && index === total - 1);
 
 	const asset = isFirst
 		? require('../../assets/markers/destination-green.png')
@@ -647,12 +647,15 @@ export default function LocatorMapbox({
 			applyCamera({ latitude, longitude });
 			const geocoded = await reverseGeocodeLocation(latitude, longitude);
 			if (!isCurrent()) return;
-			broadcastLocation(latitude, longitude, geocoded.ok ? geocoded.data.name : '');
-			setUserLocation({ latitude, longitude });
+
+			const placeName = geocoded.ok ? geocoded.data.name : 'Current location';
+			broadcastLocation(latitude, longitude, placeName);
+
+			const coords = { latitude, longitude };
+			setUserLocation(coords);
 			setLocationEnabledSynced(true);
 			setLocationPermissionGrantedSynced(true);
-
-			setLocalPlaces((prev) => replaceLast(prev, makeLocationPlace('Selected location', { latitude, longitude })));
+			applyCamera(coords, DEFAULT_ZOOM, 250);
 		} else {
 			applyCamera({ latitude: 0, longitude: 0 }, 0);
 			const errorCode = location.error?.code;
