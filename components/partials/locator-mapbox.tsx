@@ -324,13 +324,12 @@ export const CustomMarker = ({
 };
 
 const RenderLocationDisabled = ({ enabled, permissionGranted }: { enabled: boolean | null; permissionGranted: boolean | null }) => {
-	console.log('Rendering location disabled message:', { enabled, permissionGranted });
 	return (
 		<View style={styles.locationDisabledContainer}>
 			<View style={styles.locationDisabledContent}>
 				<Text style={{ color: 'red', fontSize: 15, textAlign: 'center' }}>
 					{enabled === false && 'Location services are disabled. Enable location to use this feature.'}
-					{permissionGranted === false && 'Location permission denied. Grant permission to use this feature.'}
+					{enabled && permissionGranted === false && 'Location permission denied. Grant permission to use this feature.'}
 				</Text>
 
 				<TouchableOpacity style={styles.openSettingsButton} onPress={() => {
@@ -660,7 +659,7 @@ export default function LocatorMapbox({
 			applyCamera({ latitude: 0, longitude: 0 }, 0);
 			const errorCode = location.error?.code;
 
-			if (errorCode === 'SERVICES_DISABLED') {
+			if (errorCode === 'SERVICES_DISABLED' || errorCode === 'UNAVAILABLE') {
 				onLocationEnabled?.(false);
 				setLocationEnabledSynced(false);
 				setLocationPermissionGrantedSynced(false);
@@ -836,6 +835,16 @@ export default function LocatorMapbox({
 		}
 	}, [userLocation, applyCamera, broadcastLocation]);
 
+	const handleConfirmSelection = useCallback(() => {
+		setOnSelecting(false);
+		setIsDragMarkerVisible(false);
+		const lastPlace = localPlaces[localPlaces.length - 1];
+		if (lastPlace) {
+			const { latitude, longitude } = lastPlace.geometry.coordinate;
+			broadcastLocation(latitude, longitude, lastPlace.properties.name);
+		}
+	}, [localPlaces, broadcastLocation]);
+
 	const recenterToUserLocation = useCallback(async () => {
 		setIsFitBoundsSynced(false);
 		setIsRecenteringSynced(true);
@@ -1004,12 +1013,21 @@ export default function LocatorMapbox({
 								</View>
 
 								<View style={styles.cancelSelectionContainer}>
-									<TouchableOpacity style={styles.cancelSelectionButton} onPress={handleCancelSelection}>
-										<MaterialCommunityIcons name="close-circle" size={18} color="#333" />
-										<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>
-											Cancel
-										</Text>
-									</TouchableOpacity>
+									<View style={styles.cancelWrapper}>
+										<TouchableOpacity style={styles.cancelSelectionButton} onPress={handleCancelSelection}>
+											<MaterialCommunityIcons name="close-circle" size={18} color="#333" />
+											<Text style={{ textTransform: 'uppercase', fontSize: 12, textAlign: 'center' }}>
+												Cancel
+											</Text>
+										</TouchableOpacity>
+
+										<TouchableOpacity 
+											style={[styles.cancelSelectionButton, { width: 30, height: 30, paddingHorizontal: 0, backgroundColor: '#228b22' }]} 
+											onPress={handleConfirmSelection}
+										>
+											<MaterialCommunityIcons name="check-circle" size={18} color="#fff" />
+										</TouchableOpacity>
+									</View>
 								</View>
 							</>
 						)}
@@ -1199,24 +1217,34 @@ const styles = StyleSheet.create({
 		top: '50%',
 		transform: [{ translateY: -106 }],
 		zIndex: 999,
-		justifyContent: 'center',
-		alignItems: 'center',
 	},
-	cancelSelectionButton: {
-		backgroundColor: '#f8f8ff',
-		paddingHorizontal: 6,
-		height: 36,
-		borderRadius: 20,
-		alignItems: 'center',
+	cancelWrapper: {
+		backgroundColor: '#f8fafc',
+		borderWidth: 4,
+		borderColor: '#fff',
 		justifyContent: 'center',
+		alignItems: 'center',
+		flexDirection: 'row',
+		width: 'auto',
+		height: 'auto',
+		padding: 0,
+		borderRadius: 40,
+		alignSelf: 'center',
+		gap: 4,
 		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.16,
 		shadowRadius: 4,
 		elevation: 4,
+	},
+	cancelSelectionButton: {
+		paddingHorizontal: 6,
+		height: 30,
+		borderRadius: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
 		flexDirection: 'row',
 		gap: 6,
-		borderWidth: 3,
-		borderColor: '#fff',
+		backgroundColor: '#dcdcdc',
 	},
 
 	/* Location Disabled Styles */
