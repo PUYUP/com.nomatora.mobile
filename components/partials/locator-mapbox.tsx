@@ -1243,7 +1243,7 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 		flexDirection: 'row',
-		gap: 6,
+		gap: 4,
 		backgroundColor: '#dcdcdc',
 	},
 
