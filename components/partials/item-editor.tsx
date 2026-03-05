@@ -604,13 +604,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     primaryButton: {
-        backgroundColor: '#111',
+        backgroundColor: '#ffd700',
         paddingVertical: 14,
-        borderRadius: 12,
+        borderRadius: 50,
         alignItems: 'center',
     },
     primaryButtonText: {
-        color: '#FFF',
+        color: '#111',
         fontSize: 16,
         fontWeight: '600',
     },

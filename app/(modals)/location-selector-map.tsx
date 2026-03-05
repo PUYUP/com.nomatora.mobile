@@ -413,7 +413,7 @@ export default function LocationSelectorMap() {
 					headerTitleStyle: {
 						fontSize: 20,
 						fontFamily: 'ZalandoSansExpanded_900Black',
-						color: '#1F3D2B',
+						color: '#2f4f4f',
 					},
 					headerLeft: (props) => <HeaderBackButton {...props} />,
 				}}
@@ -557,23 +557,28 @@ export default function LocationSelectorMap() {
 
 					{/* Actions */}
 					<View style={styles.actionsRow}>
-						<TouchableOpacity style={styles.secondaryButton} onPress={router.back}>
-							<Text style={styles.secondaryButtonText}>Cancel</Text>
-						</TouchableOpacity>
-						<TouchableOpacity
-							style={[
-								styles.primaryButton,
-								(!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled,
-							]}
-							onPress={handleConfirm}
-							disabled={!centerCoords || isReverseGeocodingLoading}
-						>
-							{!centerCoords || isReverseGeocodingLoading ? (
-								<ActivityIndicator color="#fff" />
-							) : (
-								<Text style={styles.primaryButtonText}>Confirm</Text>
-							)}
-						</TouchableOpacity>
+						<View style={{ flex: 1, width: '50%' }}>
+							<TouchableOpacity style={styles.secondaryButton} onPress={router.back}>
+								<Text style={styles.secondaryButtonText}>Cancel</Text>
+							</TouchableOpacity>
+						</View>
+
+						<View style={{ flex: 1, width: '50%' }}>
+							<TouchableOpacity
+								style={[
+									styles.primaryButton,
+									(!centerCoords || isReverseGeocodingLoading) && styles.primaryButtonDisabled,
+								]}
+								onPress={handleConfirm}
+								disabled={!centerCoords || isReverseGeocodingLoading}
+							>
+								{!centerCoords || isReverseGeocodingLoading ? (
+									<ActivityIndicator color="#fff" />
+								) : (
+									<Text style={styles.primaryButtonText}>Confirm</Text>
+								)}
+							</TouchableOpacity>
+						</View>
 					</View>
 				</View>
 			)}
@@ -753,26 +758,24 @@ const styles = StyleSheet.create({
 		paddingBottom: 4,
 	},
 	primaryButton: {
-		flex: 1,
-		backgroundColor: '#111',
+		backgroundColor: '#ffd700',
 		paddingVertical: 14,
 		paddingHorizontal: 16,
-		borderRadius: 12,
+		borderRadius: 50,
 		alignItems: 'center',
 	},
 	primaryButtonDisabled: {
 		backgroundColor: '#999',
 	},
 	primaryButtonText: {
-		color: 'white',
+		color: '#111',
 		fontSize: 16,
 		fontWeight: '600',
 	},
 	secondaryButton: {
-		flex: 1,
 		backgroundColor: '#f3f4f6',
 		paddingVertical: 14,
-		borderRadius: 12,
+		borderRadius: 50,
 		alignItems: 'center',
 		borderWidth: 1,
 		borderColor: '#e5e7eb',

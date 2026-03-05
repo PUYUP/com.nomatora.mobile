@@ -65,7 +65,8 @@
           "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
         }
       ],
-      "@rnmapbox/maps"
+      "@rnmapbox/maps",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

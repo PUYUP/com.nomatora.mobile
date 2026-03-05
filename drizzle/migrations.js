@@ -6,6 +6,7 @@ import m0003 from './0003_left_the_hood.sql';
 import m0004 from './0004_breezy_wonder_man.sql';
 import m0005 from './0005_typical_ben_parker.sql';
 import m0006 from './0006_cheerful_longshot.sql';
+import m0007 from './0007_elite_carnage.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0002,
 m0003,
 m0004,
 m0005,
-m0006
+m0006,
+m0007
     }
   }
   

@@ -5,6 +5,7 @@ import { mapPickerSlice } from './map-picker-slice';
 import { categoryApi } from './expense/category-api';
 import { expenseApi } from './expense/expense-api';
 import { generalSettingsApi } from './general-settings-api';
+import { trackingApi } from './tracking/tracking-api';
 
 export const store = configureStore({
     reducer: {
@@ -12,12 +13,14 @@ export const store = configureStore({
         [expenseApi.reducerPath]: expenseApi.reducer,
         [categoryApi.reducerPath]: categoryApi.reducer,
         [generalSettingsApi.reducerPath]: generalSettingsApi.reducer,
+        [trackingApi.reducerPath]: trackingApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(
             expenseApi.middleware,
             categoryApi.middleware,
             generalSettingsApi.middleware,
+            trackingApi.middleware,
         ),
 })
 

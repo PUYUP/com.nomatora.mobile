@@ -17,7 +17,7 @@ export default function DialogLayout() {
           headerTitleStyle: {
             fontSize: 20,
             fontFamily: 'ZalandoSansExpanded_900Black',
-            color: '#1F3D2B',
+            color: '#2f4f4f',
           },
           headerLeft: (props) => {
             return <HeaderBackButton {...props} />;
@@ -31,7 +31,7 @@ export default function DialogLayout() {
           headerTitleStyle: {
             fontSize: 20,
             fontFamily: 'ZalandoSansExpanded_900Black',
-            color: '#1F3D2B',
+            color: '#2f4f4f',
           },
           headerLeft: (props) => {
             return <HeaderBackButton {...props} />;
@@ -45,7 +45,21 @@ export default function DialogLayout() {
           headerTitleStyle: {
             fontSize: 20,
             fontFamily: 'ZalandoSansExpanded_900Black',
-            color: '#1F3D2B',
+            color: '#2f4f4f',
+          },
+          headerLeft: (props) => {
+            return <HeaderBackButton {...props} />;
+          },
+        }}
+      />
+      <Stack.Screen
+        name="journey-editor"
+        options={{
+          title: 'Journey Details',
+          headerTitleStyle: {
+            fontSize: 20,
+            fontFamily: 'ZalandoSansExpanded_900Black',
+            color: '#2f4f4f',
           },
           headerLeft: (props) => {
             return <HeaderBackButton {...props} />;

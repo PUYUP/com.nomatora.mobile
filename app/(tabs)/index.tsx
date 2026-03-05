@@ -1,6 +1,7 @@
 import CurrentJourney from '@/components/partials/current-journey';
 import EmptyJourney from '@/components/partials/empty-journey';
-import PreviousJourneyList from '@/components/partials/previous-journey-list';
+import PlannedJourney from '@/components/partials/planned-journey';
+import PreviousJourney from '@/components/partials/previous-journey';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -38,7 +39,13 @@ export default function HomeScreen() {
 
                     {1 > 0 && 
                         <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
-                            <PreviousJourneyList />
+                            <PlannedJourney />
+                        </View>
+                    }
+
+                    {1 > 0 && 
+                        <View style={{ paddingHorizontal: 20, marginBottom: 32 }}>
+                            <PreviousJourney />
                         </View>
                     }
                 </View>

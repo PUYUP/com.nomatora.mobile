@@ -1,7 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-export default function PreviousJourneyList() {
+export default function PreviousJourney() {
     return (
         <View style={styles.container}>
             <View style={styles.headerRow}>

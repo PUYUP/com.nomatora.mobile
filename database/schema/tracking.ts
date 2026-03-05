@@ -1,26 +1,29 @@
 import {
-    index,
-    integer,
-    primaryKey,
-    real,
-    sqliteTable,
-    text,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
 } from "drizzle-orm/sqlite-core";
 
 export const trackingSession = sqliteTable("tracking_session", {
   id: text("id").primaryKey(), // UUID string (generate di app)
   user_id: text("user_id").notNull(),
+  name: text("name"),
   mode: text("mode"), // car | bike | walk
-  started_at: integer("started_at", { mode: "timestamp" })
-    .notNull(),
-  ended_at: integer("ended_at", { mode: "timestamp" }),
+  visibility: text("visibility")
+    .notNull()
+    .default("public"), // private | public | unlisted
+  started_at: integer("started_at").notNull(),
+  ended_at: integer("ended_at"),
 });
 
 export const trackingPoints = sqliteTable(
   "tracking_points",
   {
     session_id: text("session_id").notNull(),
-    recorded_at: integer("recorded_at", { mode: "timestamp" }).notNull(),
+    recorded_at: integer("recorded_at").notNull(),
     lat: real("lat").notNull(),
     lng: real("lng").notNull(),
     speed: real("speed"), // m/s
@@ -34,3 +37,12 @@ export const trackingPoints = sqliteTable(
     recordedAtIdx: index("tracking_points_recorded_at_idx").on(table.recorded_at),
   })
 );
+
+export const places = sqliteTable("places", {
+  id: text("id").primaryKey(), // UUID
+  name: text("name").notNull(),
+  lat: real("lat").notNull(),
+  lng: real("lng").notNull(),
+  address: text("address"),
+  category: text("category"), // cafe | park | hotel
+});

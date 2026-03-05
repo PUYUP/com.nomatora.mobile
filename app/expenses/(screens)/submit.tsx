@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     locationButton: {
         width: 40,
         height: 40,
-        borderRadius: 20,
+        borderRadius: 50,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,
@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
         marginTop: 4,
         paddingHorizontal: 18,
         paddingVertical: 10,
-        borderRadius: 12,
+        borderRadius: 50,
         borderWidth: 1,
         borderColor: "#E0E0E0",
         backgroundColor: "#F4F4F4",
@@ -642,13 +642,13 @@ const styles = StyleSheet.create({
     },
     // Primary button
     primaryButton: {
-        backgroundColor: "#111",
+        backgroundColor: "#ffd700",
         paddingVertical: 14,
-        borderRadius: 12,
+        borderRadius: 50,
         alignItems: "center",
     },
     primaryButtonText: {
-        color: "#FFF",
+        color: "#111",
         fontSize: 16,
         fontWeight: "600",
     },
